@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { StockQuote } from '../../contracts/src/index.ts'
-import { HanaiDatabase } from '../src/database.ts'
+import { InvestmentDatabase } from '../src/database.ts'
 import { SecuritiesService, type SecurityDataProvider } from '../src/securities.ts'
 import type { EastmoneySecurityRow } from '../src/providers/eastmoney.ts'
 import { FakeClock } from './helpers.ts'
@@ -65,10 +65,10 @@ class FakeSecurityProvider implements SecurityDataProvider {
   }
 }
 
-function database(): HanaiDatabase {
+function database(): InvestmentDatabase {
   const root = mkdtempSync(join(tmpdir(), 'hanai-securities-'))
   roots.push(root)
-  return new HanaiDatabase(join(root, 'hanai.sqlite'))
+  return new InvestmentDatabase(join(root, 'dsh-mode-investment.sqlite'))
 }
 
 describe('SecuritiesService', () => {

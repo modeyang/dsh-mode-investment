@@ -1112,7 +1112,7 @@ function render(args: Args): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<meta name="description" content="hanai-investment-dsh 变盘点能力全量审计：生产信号、匹配对照、年度稳定性、研究候选与缠论证据。">
+<meta name="description" content="dsh-mode-investment 变盘点能力全量审计：生产信号、匹配对照、年度稳定性、研究候选与缠论证据。">
 <title>Hanai 变盘点能力审计 · 2026-08-23</title>
 <style>
 :root{--ink:#142033;--muted:#657083;--paper:#f5f2ea;--card:#fffdf8;--line:#d9d4c7;--navy:#15263e;--blue:#1f6090;--cyan:#50a9b8;--red:#b94141;--green:#28745b;--amber:#a26716;--shadow:0 14px 35px rgba(20,32,51,.09);--radius:18px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--sans:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;--serif:"Noto Serif SC","Songti SC",STSong,serif}
@@ -1134,7 +1134,7 @@ function render(args: Args): string {
   <header class="hero">
     <div class="eyebrow">Reproducible capability audit · frozen evidence</div>
     <h1>变盘点不是一个点，<br>而是一个<em>可证伪的决策过程</em></h1>
-    <p class="lede">hanai-investment-dsh 生产 10 类标记 × 日/周/月周期的全格审计，连同 raw vs matched、年度稳定性、16 个研究候选与缠论标记生命周期。所有“—”都表示源字段缺失，不作插值。</p>
+    <p class="lede">dsh-mode-investment 生产 10 类标记 × 日/周/月周期的全格审计，连同 raw vs matched、年度稳定性、16 个研究候选与缠论标记生命周期。所有“—”都表示源字段缺失，不作插值。</p>
     <div class="hero-meta"><span>报告生成：${escapeHtml(generatedAt)}</span><span>生产产物：${escapeHtml(productionGeneratedAt || '—')}</span><span>研究 cutoff：${escapeHtml(stringValue(get(production, 'metadata', 'requested_end')) || '—')}</span><span>成本：买侧约 ${fmtPct(roundTripCost, 3)} 往返</span></div>
 ${diagnosticSubset ? '    <div class="subset-banner">⚠ 当前 production 输入标记为 diagnostic_subset：本页仅用于生成器与结构验证，不得作为“全市场最终结论”。</div>\n' : ''}${sourceIncomplete ? '    <div class="subset-banner">⚠ 至少一个周期的 manifest 或解析覆盖不完整；本报告仍覆盖全部生产规则和所有可评估证券，但相关发布门禁已被强制判为失败，缺口在“系统审计风险”中披露。</div>\n' : ''}  </header>
   <div class="layout">

@@ -68,7 +68,7 @@ assertRuntimeIdentity(profileDirForManifest(profileManifestPath))
 console.log(`\nProfile ready. Start Hanai with:\n  dsh --profile ${options.profile}\n\nThe stock UI remains available with:\n  dsh web`)
 
 function parse(args: string[]): Options {
-  let profile = 'hanai-investment'
+  let profile = 'mode-investment'
   let packageSpec = resolve('.')
   let dshBin = 'dsh'
   for (let index = 0; index < args.length; index += 1) {
@@ -80,7 +80,7 @@ function parse(args: string[]): Options {
   }
   if (!/^[A-Za-z0-9._-]+$/.test(profile)) throw new Error('profile 名称只能包含字母、数字、点、下划线或连字符')
   if (['web', 'headless', 'node_modules', '.', '..'].includes(profile.toLowerCase())) {
-    throw new Error(`拒绝修改保留 profile：${profile}；请使用独立名称（默认 hanai-investment）`)
+    throw new Error(`拒绝修改保留 profile：${profile}；请使用独立名称（默认 mode-investment）`)
   }
   return { dshBin, profile, packageSpec }
 }

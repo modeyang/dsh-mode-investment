@@ -18,6 +18,14 @@ const DEFAULT_OUTPUT = resolve(ROOT, 'docs/research-data/a-share-cycle-expert-ru
 const DSH = process.env.HANAI_DSH_BIN || '/opt/homebrew/bin/dsh'
 const THEME_IDS = ['grid', 'semiconductor', 'pharma', 'appliance', 'dividend', 'robotics'] as const
 const STOCK_SYMBOLS = ['600900', '000333', '300750', '600276', '600941', '600519'] as const
+/** The five method-role experts frozen into the A-share outlook report. Newer experts join open chat and stock judgements, not this frozen council. */
+const COUNCIL_MASTER_IDS: readonly string[] = [
+  'duan-yongping-perspective',
+  'hunjianglong-perspective',
+  'munger-perspective',
+  'warren-buffett-perspective',
+  'sun-yuchen-perspective',
+]
 const MAX_OUTPUT_CHARACTERS = 6_000
 
 interface CliOptions {
@@ -522,7 +530,7 @@ async function main(): Promise<void> {
   const assetsRoot = resolveMasterAssetsRoot(import.meta.url)
   const runRoot = mkdtempSync(join(tmpdir(), 'hanai-a-share-council-'))
   try {
-    const masters = listMasters()
+    const masters = listMasters().filter(master => COUNCIL_MASTER_IDS.includes(master.id))
     const resultsByMasterId = new Map<string, Json>()
     const toExecute: Json[] = []
     for (const master of masters) {

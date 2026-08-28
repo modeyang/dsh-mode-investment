@@ -2,8 +2,8 @@ import { chmodSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { HanaiDatabase } from '../src/database.ts'
-import { ensureHanaiLayout, resolveHanaiPaths } from '../src/paths.ts'
+import { InvestmentDatabase } from '../src/database.ts'
+import { ensureInvestmentLayout, resolveInvestmentPaths } from '../src/paths.ts'
 
 const roots: string[] = []
 
@@ -11,15 +11,15 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-function database(): { db: HanaiDatabase; root: string } {
-  const root = mkdtempSync(join(tmpdir(), 'hanai-dsh-db-'))
+function database(): { db: InvestmentDatabase; root: string } {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-mode-investment-db-'))
   roots.push(root)
-  const paths = resolveHanaiPaths(root)
-  ensureHanaiLayout(paths)
-  return { db: new HanaiDatabase(paths.databasePath), root }
+  const paths = resolveInvestmentPaths(root)
+  ensureInvestmentLayout(paths)
+  return { db: new InvestmentDatabase(paths.databasePath), root }
 }
 
-describe('HanaiDatabase', () => {
+describe('InvestmentDatabase', () => {
   it('creates a private isolated layout and one default watch group', () => {
     const { db, root } = database()
     expect(statSync(root).mode & 0o777).toBe(0o700)
@@ -49,11 +49,11 @@ describe('HanaiDatabase', () => {
     expect(db.getTheme()).toBe('dark')
     db.close()
 
-    const reopened = new HanaiDatabase(db.path)
+    const reopened = new InvestmentDatabase(db.path)
     expect(reopened.getTheme()).toBe('dark')
     reopened.setTheme('light')
     reopened.close()
-    const lightReopened = new HanaiDatabase(db.path)
+    const lightReopened = new InvestmentDatabase(db.path)
     expect(lightReopened.getTheme()).toBe('light')
     lightReopened.close()
   })
@@ -133,6 +133,32 @@ describe('HanaiDatabase', () => {
     db.removeExpertChat(created.id)
     expect(db.listExpertChats()).toEqual([])
     expect(() => db.removeExpertChat(created.id)).toThrow('不存在')
+    db.close()
+  })
+
+  it('commits an immutable research plan row and cascades removal with the judgement', () => {
+    const { db } = database()
+    db.createJudgement({
+      id: 'judgement-plan', secId: '1.600519', code: '600519', stockName: '贵州茅台',
+      masterId: 'serenity-perspective', masterName: 'Serenity', masterVersion: 'v4',
+    })
+    db.updateJudgement('judgement-plan', {
+      dshSessionId: 'hanai-judgement-plan', reportStatus: 'planning', repairAttempts: 0,
+    })
+    const sealedAt = new Date().toISOString()
+    db.addResearchPlan({
+      owner_type: 'judgement', owner_id: 'judgement-plan', judgement_id: 'judgement-plan', version: 1,
+      relative_path: 'judgements/judgement-plan/plans/0001/plan.md', sha256: 'c'.repeat(64), size_bytes: 800, sealed_at: sealedAt,
+      master_id: 'serenity-perspective', master_version: 'v4', dsh_session_id: 'hanai-judgement-plan',
+    })
+    expect(db.listResearchPlanRows('judgement-plan')).toEqual([
+      expect.objectContaining({
+        owner_type: 'judgement', owner_id: 'judgement-plan', judgement_id: 'judgement-plan', version: 1,
+        relative_path: 'judgements/judgement-plan/plans/0001/plan.md', sha256: 'c'.repeat(64), size_bytes: 800, sealed_at: sealedAt,
+      }),
+    ])
+    db.removeJudgement('judgement-plan')
+    expect(db.listResearchPlanRows('judgement-plan')).toEqual([])
     db.close()
   })
 

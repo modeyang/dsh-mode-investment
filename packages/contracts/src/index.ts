@@ -229,10 +229,13 @@ export interface MasterPersona {
   personaDisclaimer?: string
   /** Optional conversation starters shown before the first open-chat message. */
   chatStarters?: string[]
+  /** Plan-first experts seal a research plan (PLAN.md) before research in the same session. */
+  planFirst?: boolean
 }
 
 export type ReportStatus =
   | 'preparing'
+  | 'planning'
   | 'generating'
   | 'verifying'
   | 'repairing'
@@ -241,6 +244,8 @@ export type ReportStatus =
   | 'failed'
 
 export type TurnStatus = 'idle' | 'queued' | 'running' | 'cancelling' | 'failed'
+export type ResearchPlanStatus = 'none' | 'planning' | 'ready' | 'failed'
+export type ResearchPlanOwnerType = 'judgement' | 'expert-chat'
 
 export interface Judgement {
   id: string
@@ -262,6 +267,9 @@ export interface Judgement {
   completedAt: string | null
   errorCode: string | null
   errorMessage: string | null
+  planStatus: ResearchPlanStatus
+  latestPlanVersion: number | null
+  planRepairAttempts?: number
 }
 
 export interface ReportVersion {
@@ -275,9 +283,23 @@ export interface ReportVersion {
   model: string | null
 }
 
+/** Immutable sealed research plan snapshot, produced by plan-first experts before the report. */
+export interface ResearchPlan {
+  ownerType: ResearchPlanOwnerType
+  ownerId: string
+  judgementId: string | null
+  version: number
+  content: string
+  sha256: string
+  sizeBytes: number
+  sealedAt: string
+}
+
 export interface JudgementDetail {
   judgement: Judgement
   reports: ReportVersion[]
+  /** Present only for plan-first experts once their PLAN.md has been sealed. */
+  plan: ResearchPlan | null
 }
 
 /** Business metadata for an expert conversation. DSH remains the sole owner of all messages and turns. */
@@ -296,6 +318,14 @@ export interface ExpertChat {
   updatedAt: string
   errorCode: string | null
   errorMessage: string | null
+  planStatus: ResearchPlanStatus
+  latestPlanVersion: number | null
+  planRepairAttempts?: number
+}
+
+export interface ExpertChatDetail {
+  expertChat: ExpertChat
+  plan: ResearchPlan | null
 }
 
 export interface StockDetail {
@@ -451,7 +481,7 @@ export interface HanaiEndpointMap {
   'judgement.remove': { request: { id: string }; response: Judgement[] }
   'expert-chat.list': { request: Record<string, never>; response: ExpertChat[] }
   'expert-chat.create': { request: CreateExpertChatInput; response: ExpertChat }
-  'expert-chat.get': { request: { id: string }; response: ExpertChat }
+  'expert-chat.get': { request: { id: string }; response: ExpertChatDetail }
   'expert-chat.remove': { request: { id: string }; response: ExpertChat[] }
   'model.default.get': {
     request: Record<string, never>

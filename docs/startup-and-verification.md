@@ -4,7 +4,7 @@
 
 ## 1. 结论
 
-Hanai Worth · 值见当前以兼容包名 `hanai-investment-dsh` 和独立 DSH Profile 运行，不修改官方 `web` Profile。客户端是 Hanai Worth 自有 React 工作台，DSH 提供 Agent、模型、工具、Session 与会话持久化。新版业务数据只写入 `~/.hanai-investment-dsh`，不会检测、读取或导入旧版数据。
+Hanai Worth · 值见当前以兼容包名 `dsh-mode-investment` 和独立 DSH Profile 运行，不修改官方 `web` Profile。客户端是 Hanai Worth 自有 React 工作台，DSH 提供 Agent、模型、工具、Session 与会话持久化。新版业务数据只写入 `~/.dsh-mode-investment`，不会检测、读取或导入旧版数据。
 
 ## 2. 已验证环境
 
@@ -13,7 +13,7 @@ Hanai Worth · 值见当前以兼容包名 `hanai-investment-dsh` 和独立 DSH 
 | Node.js | `v22.22.0` |
 | pnpm | `11.7.0` |
 | DeepSeek Harness | `0.1.1-rc.2` |
-| Profile | `hanai-investment` |
+| Profile | `mode-investment` |
 | 默认监听 | `http://127.0.0.1:3080` |
 
 如果本机 pnpm 不是 11.7.0，可以先执行：
@@ -33,7 +33,7 @@ pnpm install --frozen-lockfile
 pnpm run build
 pnpm run profile:install -- --package .
 pnpm run profile:verify
-dsh --profile hanai-investment
+dsh --profile mode-investment
 ```
 
 终端出现以下输出后，在浏览器打开对应地址：
@@ -44,12 +44,12 @@ dsh web: http://127.0.0.1:3080
 
 安装器会执行以下装配与迁移：
 
-1. 安装当前 Hanai 插件包；
-2. 把 Bundle 顺序规范化为 `@deepseek-ai/dsh-base` → `@deepseek-ai/dsh-web-app` → `hanai-investment-dsh`；
+1. 安装当前 dsh-mode-investment 插件包；
+2. 把 Bundle 顺序规范化为 `@deepseek-ai/dsh-base` → `@deepseek-ai/dsh-web-app` → `dsh-mode-investment`；
 3. 从 Profile dependencies 中移除早期版本错误安装的 `@deepseek-ai/dsh-web-app`，再由 pnpm 清理它带入的本地 DSH runtime 副本；
 4. 校验 Profile 与 `dsh-agent-loop` 解析到同一个真实 `@deepseek-ai/dsh-tools` 模块。
 
-Base 和 Web App 是当前 DSH CLI 自带的 installation-owned Bundle，不应安装成 Profile dependency。Profile 中只保留 `hanai-investment-dsh` 这一项直接依赖。
+Base 和 Web App 是当前 DSH CLI 自带的 installation-owned Bundle，不应安装成 Profile dependency。Profile 中只保留 `dsh-mode-investment` 这一项直接依赖。
 
 安装器明确拒绝 `web`、`headless`、`node_modules` 等保留名称，也会拒绝覆盖包含无关插件的同名 Profile。
 
@@ -68,13 +68,13 @@ Base 和 Web App 是当前 DSH CLI 自带的 installation-owned Bundle，不应�
 后续只需：
 
 ```bash
-dsh --profile hanai-investment
+dsh --profile mode-investment
 ```
 
 端口被占用时可以指定其它 loopback 端口：
 
 ```bash
-dsh --profile hanai-investment --port 3081
+dsh --profile mode-investment --port 3081
 ```
 
 在运行终端按 `Ctrl+C` 停止。原生 DSH Web 仍使用：
@@ -89,10 +89,10 @@ dsh web
 
 | 数据 | 所有者 | 默认位置 |
 | --- | --- | --- |
-| 自选、证券主数据、研判/专家对谈索引、报告、行情/估值缓存 | Hanai | `~/.hanai-investment-dsh` |
+| 自选、证券主数据、研判/专家对谈索引、报告、行情/估值缓存 | Hanai | `~/.dsh-mode-investment` |
 | DeepSeek Key、默认模型、Session 消息、工具事件、附件 | DSH | 当前 `$DSH_HOME` |
 
-实测新数据根目录权限为 `0700`，SQLite 文件权限为 `0600`。旧版目录保留原状，新版没有数据导入入口。
+实测新数据根目录权限为 `0700`，SQLite 文件权限为 `0600`。旧数据目录保留原状，新版没有数据导入入口。
 
 ## 7. 自动化验收
 
@@ -109,12 +109,12 @@ pnpm run check
 | 门禁 | 结果 |
 | --- | --- |
 | `pnpm run typecheck` | 通过 |
-| `pnpm run test` | 27 个测试文件、187 项测试全部通过 |
+| `pnpm run test` | 29 个测试文件、204 项测试全部通过 |
 | `pnpm run build` | Host、Client 与 Profile tools 构建通过 |
-| `pnpm run pack:check` | 71 个发布文件通过 |
+| `pnpm run pack:check` | 90 个发布文件通过 |
 | `git diff --check` | 通过 |
 
-五个专家 Skill 均通过结构校验，其中新增孙宇晨视角还通过 `skill-creator` 的 `quick_validate.py`；原始迁移资产中的 51 个文件继续由 SHA-256 清单校验，发布包包含全部 8 个脚本。已在 rc.2 Host/Web 上完成 Profile 启动、页面加载、Session 创建与 prompt/event 链路 smoke；临时无 Key 环境中的模型调用按预期停在凭据校验。
+六个专家 Skill 均通过结构校验，其中新增孙宇晨视角还通过 `skill-creator` 的 `quick_validate.py`；原始迁移资产中的 51 个文件继续由 SHA-256 清单校验，发布包包含全部 8 个脚本。已在 rc.2 Host/Web 上完成 Profile 启动、页面加载、Session 创建与 prompt/event 链路 smoke；临时无 Key 环境中的模型调用按预期停在凭据校验。
 
 另外已使用全新的临时 `DSH_HOME` 实际执行：
 
@@ -136,8 +136,9 @@ pnpm run profile:verify
 - 股票详情：默认日 K、完整 dataZoom、分时、雷达、真实时间轴价值曲线、±10%/±30% 红绿价值带与未来预测提示；
 - 股票详情渐进加载：本机实测约 0.6 秒内先出现证券名称与页面结构，日 K、估值和其它分面随后独立收敛；周/月 K 仅在切换时加载；
 - 自选：分组管理、三态排序、加入/移动/移除和整行进入详情；
-- 研判：原列表、筛选、创建弹窗、执行过程、报告归档与同 Session 继续对话入口；
-- 专家对谈：股票无关入口、五位专家选择、孙宇晨开场问题与身份披露、空白 Session、历史列表、深链、删除约束和专家语境聊天文案；
+- 研判：原列表、筛选、创建弹窗、执行过程、报告归档与同 Session 继续对话入口；Serenity 两阶段研判（先封存研究计划、再生成报告）与详情页“查看研究计划”；
+- 专家对谈：股票无关入口、六位专家选择、Serenity 主题必填与先计划后研究、计划详情、孙宇晨开场问题与身份披露、普通空白 Session、历史列表、深链、删除约束和专家语境聊天文案；
+- 专家中心与两阶段研判：六位专家卡（含 Serenity）经 `agent-browser` 在 `http://127.0.0.1:3090/#/personas` 可见；Serenity 研判先封存 `PLAN.md` 再进入研究阶段生成 `REPORT.md`，与现有报告校验/封存共用同一套校验与 SHA-256 管线。
 - 900 × 800 专家对谈详情：响应式上下分栏且无水平溢出；
 - 设置：Key write-only、默认模型真实读写、缓存、存储、数据源和主题；
 - Hash 路由：直接打开、刷新、后退和前进均保持页面语义；
@@ -186,10 +187,10 @@ pnpm run profile:verify
 
 ```bash
 pnpm run profile:verify
-dsh --profile hanai-investment --dump-default-config
+dsh --profile mode-investment --dump-default-config
 ```
 
-安装器只修改 `hanai-investment` 的 Profile manifest、lockfile 与依赖目录；它不会修改官方 `web` Profile 的 manifest 或 patch。以下命令还会拒绝 Bundle 顺序错误、Web App 被直接安装、无关 dependency，以及 DSH runtime identity 分裂：
+安装器只修改 `mode-investment` 的 Profile manifest、lockfile 与依赖目录；它不会修改官方 `web` Profile 的 manifest 或 patch。以下命令还会拒绝 Bundle 顺序错误、Web App 被直接安装、无关 dependency，以及 DSH runtime identity 分裂：
 
 ```bash
 pnpm run profile:verify

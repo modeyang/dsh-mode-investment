@@ -3,7 +3,7 @@ import { hanaiClientBundle } from './tooling/dsh-client-bundle/index.ts'
 
 export default defineConfig([
   {
-    name: 'hanai-investment-dsh/host',
+    name: 'dsh-mode-investment/host',
     entry: { index: 'packages/host/src/index.ts' },
     outDir: 'lib',
     format: 'esm',
@@ -17,7 +17,7 @@ export default defineConfig([
     },
   },
   {
-    name: 'hanai-investment-dsh/profile-tools',
+    name: 'dsh-mode-investment/profile-tools',
     entry: {
       'install-profile': 'scripts/install-profile.ts',
       'verify-profile': 'scripts/verify-profile.ts',
@@ -33,5 +33,5 @@ export default defineConfig([
       entryFileNames: '[name].js',
     },
   },
-  hanaiClientBundle('hanai-investment-dsh', 'packages/client-workbench/src/index.tsx'),
+  hanaiClientBundle('dsh-mode-investment', 'packages/client-workbench/src/index.tsx'),
 ])

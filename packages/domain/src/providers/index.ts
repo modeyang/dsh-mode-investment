@@ -11,7 +11,7 @@ import type {
   StockTrendData,
   StockValuationData,
 } from '../../../contracts/src/index.ts'
-import type { HanaiDatabase } from '../database.ts'
+import type { InvestmentDatabase } from '../database.ts'
 import { NodeFetchHttpClient, systemClock, type Clock, type HttpClient } from '../http.ts'
 import { SecuritiesService } from '../securities.ts'
 import { EastmoneyProvider, type EastmoneyProviderOptions } from './eastmoney.ts'
@@ -199,13 +199,13 @@ export class MarketDataService {
   }
 
   syncSecurities(
-    database: HanaiDatabase,
+    database: InvestmentDatabase,
     force = false,
   ): Promise<{ count: number; updatedAt: string | null }> {
     return new SecuritiesService(database, this.eastmoney, { clock: this.clock }).sync(force)
   }
 
-  searchSecurities(database: HanaiDatabase, query: string): Promise<SearchResult[]> {
+  searchSecurities(database: InvestmentDatabase, query: string): Promise<SearchResult[]> {
     return new SecuritiesService(database, this.eastmoney, { clock: this.clock }).search(query)
   }
 }

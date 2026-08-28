@@ -16,7 +16,7 @@ interface ClientHandoff {
   id: string
 }
 
-const PACKAGE_NAME = 'hanai-investment-dsh'
+const PACKAGE_NAME = 'dsh-mode-investment'
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 const EXPECTED_KEYWORDS = [
@@ -47,6 +47,7 @@ const EXPECTED_INJECT = [
 // Keep the forbidden sentinel out of this verifier's own source text. This
 // lets repository-wide literal scans distinguish the gate from a violation.
 const LEGACY_DATA_DIRECTORY = `.${['hanai', 'investment'].join('-')}`
+const RENAMED_DATA_DIRECTORY = '.hanai-investment-dsh'
 const LEGACY_DATA_DIRECTORY_PATTERN = new RegExp(
   `${escapeRegExp(LEGACY_DATA_DIRECTORY)}(?!-dsh)`,
 )
@@ -259,6 +260,10 @@ function assertNoLegacyDataDirectory(source: string, label: string): void {
     match === null,
     `${label} contains the legacy data directory literal at offset ${match?.index ?? -1}; published code may name only the isolated -dsh root`,
   )
+  invariant(
+    !source.includes(RENAMED_DATA_DIRECTORY),
+    `${label} contains the pre-rename data directory literal; published code must use the dsh-mode-investment root`,
+  )
 }
 
 function assertNoPrivateBuildPath(source: string, label: string): void {
@@ -295,8 +300,10 @@ function npmDryRunFiles(): string[] {
   // npm 7's `pack --json` prints only the tarball name, while newer npm emits
   // structured JSON. The notice-level Contents block is stable across both
   // and preserves Unicode paths, so parse that actual packlist instead.
-  const contentsStart = '=== Tarball Contents ==='
-  const contentsEnd = '=== Tarball Details ==='
+  // npm 7 wraps the markers in `=== ... ===`; npm 11 dropped the `===`
+  // decoration, so match the bare section names on either line shape.
+  const contentsStart = 'Tarball Contents'
+  const contentsEnd = 'Tarball Details'
   const report = result.stderr.includes(contentsStart) ? result.stderr : result.stdout
   const lines = report.split(/\r?\n/)
   const start = lines.findIndex((line) => line.includes(contentsStart))

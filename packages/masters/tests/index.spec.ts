@@ -52,11 +52,13 @@ describe('legacy master Skill migration', () => {
     const bundled = relativeFiles(ASSETS_ROOT).filter(file => file !== 'migration-manifest.json')
     expect(bundled.filter(file => Object.hasOwn(manifest.files, file)))
       .toEqual(Object.keys(manifest.files).sort())
-    expect(bundled.filter(file => !Object.hasOwn(manifest.files, file))).toEqual([
+    const extraFiles = [
       'sun-yuchen-perspective/SKILL.md',
       'sun-yuchen-perspective/agents/openai.yaml',
       'sun-yuchen-perspective/references/provenance.md',
-    ])
+      ...relativeFiles(join(ASSETS_ROOT, 'serenity-perspective')).map(file => `serenity-perspective/${file}`),
+    ].sort()
+    expect(bundled.filter(file => !Object.hasOwn(manifest.files, file))).toEqual(extraFiles)
     for (const [file, digest] of Object.entries(manifest.files)) {
       expect(sha256(join(ASSETS_ROOT, ...file.split('/'))), file).toBe(digest)
     }
@@ -77,14 +79,16 @@ describe('legacy master Skill migration', () => {
       'munger-perspective',
       'warren-buffett-perspective',
       'sun-yuchen-perspective',
+      'serenity-perspective',
     ])
-    expect(new Set(masters.map(master => master.version))).toEqual(new Set(['2026.08.23-v3']))
+    expect(new Set(masters.map(master => master.version))).toEqual(new Set(['2026.08.28-v4']))
     expect(masters.map(({ color, roleTag, tags }) => ({ color, roleTag, tags }))).toEqual([
       { color: '#d4a017', roleTag: '价值投资', tags: ['本分', '消费者导向', '长期价值'] },
       { color: '#c4573d', roleTag: '游资大佬', tags: ['题材周期', '情绪', '弱转强'] },
       { color: '#5b8def', roleTag: '价值投资', tags: ['多元思维', '逆向思考', '认知偏误'] },
       { color: '#34a870', roleTag: '价值投资', tags: ['护城河', '内在价值', '资本配置'] },
       { color: '#f29d38', roleTag: '行业与注意力周期', tags: ['行业周期', '注意力套利', '叙事判断'] },
+      { color: '#0ea5e9', roleTag: '产业链瓶颈研究', tags: ['供应链卡点', '证据分层', '逆向核验'] },
     ])
     for (const master of masters) {
       const markdown = readFileSync(join(ASSETS_ROOT, master.id, 'SKILL.md'), 'utf8')
@@ -96,11 +100,16 @@ describe('legacy master Skill migration', () => {
     }
     expect(masters[0]!.defaultPrompt).toContain('$duan-yongping-perspective')
     expect(masters[1]!.defaultPrompt).toContain('$hunjianglong-perspective')
-    expect(masters.at(-1)).toMatchObject({
+    expect(masters.find(master => master.id === 'sun-yuchen-perspective')).toMatchObject({
       id: 'sun-yuchen-perspective',
       chatOnly: true,
       personaDisclaimer: expect.stringContaining('AI 视角模拟'),
       chatStarters: expect.arrayContaining([expect.stringContaining('永远缺存储')]),
+    })
+    expect(masters.find(master => master.id === 'serenity-perspective')).toMatchObject({
+      id: 'serenity-perspective',
+      planFirst: true,
+      chatStarters: expect.arrayContaining([expect.stringContaining('产业链层级')]),
     })
   })
 
@@ -158,6 +167,22 @@ describe('legacy master Skill migration', () => {
     expect(instructions).toContain('不代表孙宇晨本人观点')
     expect(instructions).toContain('不得把操纵市场、欺骗、规避监管或其他违法行为包装成可执行建议')
     expect(instructions).toContain('不要创建或改写 `REPORT.md`')
+  })
+
+  it('writes a two-stage workspace contract for plan-first experts', () => {
+    const master = listMasters().find(candidate => candidate.id === 'serenity-perspective')!
+    const workspace = mkdtempSync(join(tmpdir(), 'hanai-plan-first-instructions-'))
+    temporaryRoots.push(workspace)
+    const installed = installMasterSnapshot(ASSETS_ROOT, master, workspace)
+    const instructions = readFileSync(installed.agentsPath, 'utf8')
+
+    expect(instructions).toContain('# Hanai Worth · 值见 研判工作区（两阶段）')
+    expect(instructions).toContain('第一阶段：把研究计划完整写入 `PLAN.md`')
+    expect(instructions).toContain('产业链位置与稀缺环节判断')
+    expect(instructions).toContain('失效条件与反证')
+    expect(instructions).toContain('第二阶段：收到继续研究的指令后')
+    expect(instructions).toContain('覆盖写入 `REPORT.md`')
+    expect(instructions).not.toContain('唯一正式交付物是工作区根目录的 `REPORT.md`')
   })
 
   it('rejects a truncated or modified release asset', () => {

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import type { MasterPersona } from '../../contracts/src/index.ts'
 
 // Bump whenever either the immutable Skill snapshot or its workspace contract changes.
-export const MASTER_VERSION = '2026.08.23-v3'
+export const MASTER_VERSION = '2026.08.28-v4'
 
 interface MasterTheme extends Omit<MasterPersona, 'description' | 'version'> {}
 
@@ -60,6 +60,21 @@ const MASTER_THEMES: readonly MasterTheme[] = [
       '最近哪个行业正在从过剩走向短缺？先说判断框架。',
       '“永远缺存储”这类判断要看哪些供需和资本开支信号？',
       '一个热点出现后，怎么判断是产业趋势还是注意力泡沫？',
+    ],
+  },
+  {
+    id: 'serenity-perspective',
+    name: 'Serenity',
+    shortName: '链',
+    color: '#0ea5e9',
+    roleTag: '产业链瓶颈研究',
+    tags: ['供应链卡点', '证据分层', '逆向核验'],
+    defaultPrompt: '请用 Serenity 式产业链研究方法，为这家公司定位稀缺环节、评估证据强度并给出可证伪的研究判断。',
+    planFirst: true,
+    chatStarters: [
+      '为什么 AI 基建里存储互连可能比算力芯片更早出现瓶颈？先排产业链层级。',
+      '怎么区分一家公司是控制卡点、供应卡点，还是只是蹭主题？',
+      '什么证据能说明客户短期绕不开某家供应商？',
     ],
   },
 ] as const
@@ -188,7 +203,9 @@ function parseOpenaiDefaultPrompt(yaml: string): string | null {
 }
 
 function agentsDocument(master: MasterPersona, mode: MasterWorkspaceMode): string {
+  if (mode === 'open-chat' && master.planFirst === true) return planFirstOpenChatAgentsDocument(master)
   if (mode === 'open-chat') return openChatAgentsDocument(master)
+  if (master.planFirst === true) return planFirstAgentsDocument(master)
   return `# Hanai Worth · 值见 研判工作区\n\n`
     + `本工作区由 Hanai Worth · 值见创建，绑定大师：${master.name}（${master.id}，版本 ${master.version}）。\n\n`
     + `## 必须遵守\n\n`
@@ -202,6 +219,34 @@ function agentsDocument(master: MasterPersona, mode: MasterWorkspaceMode): strin
     + `8. 报告完成后的普通追问直接回答用户，不要改写 \`REPORT.md\`；只有用户明确要求创建修订版时才更新。\n`
     + `9. 完成 \`REPORT.md\` 后只用一句话确认已完成，不要在回复中重复整份报告。\n`
     + `10. 内容仅供研究参考，不构成投资建议。\n`
+}
+
+function planFirstAgentsDocument(master: MasterPersona): string {
+  return `# Hanai Worth · 值见 研判工作区（两阶段）\n\n`
+    + `本工作区由 Hanai Worth · 值见创建，绑定大师：${master.name}（${master.id}，版本 ${master.version}）。\n\n`
+    + `## 必须遵守\n\n`
+    + `1. 在每次回答前完整读取 \`.agents/skills/${master.id}/SKILL.md\`，并按其中路由读取必要参考资料。\n`
+    + `2. 整段 Session 固定使用该大师的方法论与身份状态；不要切换成其他大师。\n`
+    + `3. 初次研判与显式修订时，主动联网获取最新公开信息并交叉核验；不要向用户提问，也不要等待用户补充材料。\n`
+    + `4. 只可在当前工作区内写文件。本次研判分两个阶段，两阶段交付物都在工作区根目录：\n`
+    + `   - 第一阶段：把研究计划完整写入 \`PLAN.md\`。计划必须可独立阅读，并至少包含：产业链位置与稀缺环节判断、证据清单与来源计划、市场可能没看清的地方、失效条件与反证、下一步先查什么。完成 \`PLAN.md\` 后只用一句话确认已完成，不要重复整份计划。\n`
+    + `   - 第二阶段：收到继续研究的指令后，重新读取 \`PLAN.md\` 与 \`SKILL.md\`，按计划执行研究，并把完整、可独立阅读的中文 Markdown 报告覆盖写入 \`REPORT.md\`。\n`
+    + `5. 报告必须使用简体中文，清楚区分事实、推断与假设，并为关键事实注明来源链接和日期。\n`
+    + `6. 严禁编造实时行情、财务数据、来源或引文；资料不足时必须明确标记不确定性和待验证项。\n`
+    + `7. 报告完成后的普通追问直接回答用户，不要改写 \`PLAN.md\` 或 \`REPORT.md\`；只有用户明确要求创建修订版时才更新。\n`
+    + `8. 完成 \`REPORT.md\` 后只用一句话确认已完成，不要在回复中重复整份报告。\n`
+    + `9. 内容仅供研究参考，不构成投资建议。\n`
+}
+
+function planFirstOpenChatAgentsDocument(master: MasterPersona): string {
+  return `# Hanai Worth · 值见 Serenity 专家开放对谈工作区（两阶段）\n\n`
+    + `本工作区由 Hanai Worth · 值见创建，绑定专家：${master.name}（${master.id}，版本 ${master.version}）。\n\n`
+    + `## 必须遵守\n\n`
+    + `1. 会话开始时完整读取 .agents/skills/${master.id}/SKILL.md，先按 Serenity 方法制定计划。\n`
+    + '2. 第一阶段只把研究计划写入工作区根目录的 `PLAN.md`，至少包含系统变化、产业链层级、供应链卡点、证据清单、反方与失效条件、下一步验证；不要把计划当最终结论。\n'
+    + '3. 收到继续研究的指令后重新读取已封存 `PLAN.md`，按计划联网核验并回答用户；开放对谈不创建 `REPORT.md`。\n'
+    + `4. 事实、推断、假设和角色化表达必须分开；不得编造来源、数据或客户关系。\n`
+    + `5. 投资与行业判断仅供研究参考，不构成投资建议；给出反方理由和失效条件。\n`
 }
 
 function openChatAgentsDocument(master: MasterPersona): string {

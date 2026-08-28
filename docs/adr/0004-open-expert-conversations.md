@@ -26,7 +26,7 @@
 目录为：
 
 ```text
-~/.hanai-investment-dsh/expert-chats/<chat-id>/workspace/
+~/.dsh-mode-investment/expert-chats/<chat-id>/workspace/
 ├── AGENTS.md
 └── .agents/skills/<master-id>/...
 ```

@@ -34,10 +34,16 @@ import type {
   WatchValuation,
 } from '../../contracts/src/index.ts'
 import { getMasterPersona, listMasters } from '../../masters/src/index.ts'
-import { HanaiDatabase } from '../../domain/src/database.ts'
-import type { HanaiPaths } from '../../domain/src/paths.ts'
+import { InvestmentDatabase } from '../../domain/src/database.ts'
+import type { InvestmentPaths } from '../../domain/src/paths.ts'
 import { ReportStore, ReportValidationError } from '../../domain/src/reports.ts'
 import { ExpertChatStore } from '../../domain/src/expert-chats.ts'
+import {
+  ResearchPlanStore,
+  ResearchPlanValidationError,
+  researchPlanOwnerFromJudgement,
+  type ResearchPlanOwner,
+} from '../../domain/src/research-plans.ts'
 
 const MARKET_SUCCESS_SETTING = 'market.latestSuccess'
 const VALUATION_SUCCESS_SETTING = 'valuation.latestSuccess'
@@ -45,18 +51,18 @@ const VALUATION_SUCCESS_SETTING = 'valuation.latestSuccess'
 export interface MarketFacade {
   getDashboard(refresh?: boolean): Promise<DashboardData>
   getSectorStocks(sectorCode: string): Promise<{ stocks: StockQuote[]; meta: ProviderMeta }>
-  getStockDetail(secId: string, security?: ReturnType<HanaiDatabase['getSecurity']>): Promise<StockDetail>
+  getStockDetail(secId: string, security?: ReturnType<InvestmentDatabase['getSecurity']>): Promise<StockDetail>
   getStockQuoteMetrics(secId: string): Promise<StockQuoteMetricsData>
   getTrend(secId: string): Promise<StockTrendData>
   getKline(secId: string, period: KLinePeriod, before?: string): Promise<StockKLineData>
   getValuation(
     secId: string,
-    security?: ReturnType<HanaiDatabase['getSecurity']>,
+    security?: ReturnType<InvestmentDatabase['getSecurity']>,
   ): Promise<StockValuationData>
   getQuotes(secIds: readonly string[]): Promise<{ quotes: StockQuote[]; meta: ProviderMeta }>
   clearMarketCache(): number
-  syncSecurities(database: HanaiDatabase, force?: boolean): Promise<{ count: number; updatedAt: string | null }>
-  searchSecurities(database: HanaiDatabase, query: string): Promise<SearchResult[]>
+  syncSecurities(database: InvestmentDatabase, force?: boolean): Promise<{ count: number; updatedAt: string | null }>
+  searchSecurities(database: InvestmentDatabase, query: string): Promise<SearchResult[]>
 }
 
 export interface SessionFacade {
@@ -73,9 +79,10 @@ export interface DefaultModelFacade {
 }
 
 export interface HanaiServiceOptions {
-  paths: HanaiPaths
-  database: HanaiDatabase
+  paths: InvestmentPaths
+  database: InvestmentDatabase
   reports: ReportStore
+  researchPlans: ResearchPlanStore
   expertChats: ExpertChatStore
   sessions: SessionFacade
   defaultModel: DefaultModelFacade
@@ -87,9 +94,10 @@ export interface HanaiServiceOptions {
 
 /** Coordinates Hanai business state while DSH remains the sole owner of conversation history. */
 export class HanaiService {
-  private readonly paths: HanaiPaths
-  private readonly database: HanaiDatabase
+  private readonly paths: InvestmentPaths
+  private readonly database: InvestmentDatabase
   private readonly reports: ReportStore
+  private readonly researchPlans: ResearchPlanStore
   private readonly expertChats: ExpertChatStore
   private readonly sessions: SessionFacade
   private readonly defaultModel: DefaultModelFacade
@@ -97,11 +105,24 @@ export class HanaiService {
   private readonly version: string
   private readonly openDirectory: (directory: string) => Promise<void>
   private readonly reportJobs = new Map<string, Promise<void>>()
+  private readonly planJobs = new Map<string, Promise<void>>()
+  private readonly chatPlanJobs = new Map<string, Promise<void>>()
+
+  private enqueueChatPlanJob(chatId: string): void {
+    const previous = this.chatPlanJobs.get(chatId) ?? Promise.resolve()
+    const next = previous.then(() => this.finalizeChatPlan(chatId))
+      .catch((error) => this.failExpertChat(chatId, 'plan-finalize-failed', messageOf(error)))
+      .finally(() => {
+        if (this.chatPlanJobs.get(chatId) === next) this.chatPlanJobs.delete(chatId)
+      })
+    this.chatPlanJobs.set(chatId, next)
+  }
 
   constructor(options: HanaiServiceOptions) {
     this.paths = options.paths
     this.database = options.database
     this.reports = options.reports
+    this.researchPlans = options.researchPlans
     this.expertChats = options.expertChats
     this.sessions = options.sessions
     this.defaultModel = options.defaultModel
@@ -144,7 +165,8 @@ export class HanaiService {
         this.database.updateJudgement(judgement.id, { turnStatus: 'running' })
         continue
       }
-      this.enqueueReportJob(judgement.id)
+      if (judgement.reportStatus === 'planning') this.enqueuePlanJob(judgement.id)
+      else this.enqueueReportJob(judgement.id)
     }
     for (const chat of this.database.listExpertChats()) {
       if (chat.dshSessionId === null) {
@@ -157,6 +179,8 @@ export class HanaiService {
       }
       if (await this.sessions.isRunning(chat.dshSessionId)) {
         this.database.updateExpertChat(chat.id, { turnStatus: 'running', errorCode: null, errorMessage: null })
+      } else if (chat.planStatus === 'planning') {
+        this.enqueueChatPlanJob(chat.id)
       } else if (chat.turnStatus === 'queued' || chat.turnStatus === 'running' || chat.turnStatus === 'cancelling') {
         this.database.updateExpertChat(chat.id, { turnStatus: 'idle', errorCode: null, errorMessage: null })
       }
@@ -173,7 +197,8 @@ export class HanaiService {
       if (event.type !== 'turn/end') return
       if (isReportInFlight(judgement)) {
         if (event.data.reason.kind === 'completed' || event.data.reason.kind === 'max-tokens') {
-          this.enqueueReportJob(judgement.id)
+          if (judgement.reportStatus === 'planning') this.enqueuePlanJob(judgement.id)
+          else this.enqueueReportJob(judgement.id)
         } else {
           this.failReportAttempt(
             judgement,
@@ -200,6 +225,11 @@ export class HanaiService {
       return
     }
     if (event.type !== 'turn/end') return
+    if (chat.planStatus === 'planning'
+      && (event.data.reason.kind === 'completed' || event.data.reason.kind === 'max-tokens')) {
+      this.enqueueChatPlanJob(chat.id)
+      return
+    }
     this.database.updateExpertChat(chat.id, {
       turnStatus: event.data.reason.kind === 'error' ? 'failed' : 'idle',
       ...(event.data.reason.kind === 'error'
@@ -316,7 +346,7 @@ export class HanaiService {
       )
       case 'expert-chat.list': return this.database.listExpertChats()
       case 'expert-chat.create': return this.createExpertChat(request as HanaiRequest<'expert-chat.create'>)
-      case 'expert-chat.get': return this.getExpertChat((request as HanaiRequest<'expert-chat.get'>).id)
+      case 'expert-chat.get': return this.getExpertChatDetail((request as HanaiRequest<'expert-chat.get'>).id)
       case 'expert-chat.remove': return this.removeExpertChat(
         (request as HanaiRequest<'expert-chat.remove'>).id,
       )
@@ -530,7 +560,7 @@ export class HanaiService {
     return { valuations, meta: newestProviderMeta(metas) }
   }
 
-  private async addWatchItem(input: HanaiRequest<'watch.item.add'>): Promise<ReturnType<HanaiDatabase['listWatchGroups']>> {
+  private async addWatchItem(input: HanaiRequest<'watch.item.add'>): Promise<ReturnType<InvestmentDatabase['listWatchGroups']>> {
     let basePrice: number | null = null
     try {
       const result = await this.market.getQuotes([input.secId])
@@ -546,8 +576,11 @@ export class HanaiService {
   private async createExpertChat(input: HanaiRequest<'expert-chat.create'>): Promise<ExpertChat> {
     const master = getMasterPersona(input.masterId)
     if (master === null) throw new Error('专家不存在')
+    const planFirst = master.planFirst === true
+    if (planFirst && input.openingMessage === undefined) throw new Error('Serenity 对谈必须先提供研究主题')
     const id = randomUUID()
     let chat = this.database.createExpertChat({
+      planStatus: planFirst ? 'planning' : 'none',
       id,
       title: expertChatTitle(master.name, input.openingMessage),
       masterId: master.id,
@@ -568,11 +601,18 @@ export class HanaiService {
       chat = this.database.updateExpertChat(id, {
         dshSessionId: sessionId,
         turnStatus: input.openingMessage === undefined ? 'idle' : 'queued',
+        planStatus: planFirst ? 'planning' : 'none',
+        latestPlanVersion: null,
+        planRepairAttempts: 0,
         errorCode: null,
         errorMessage: null,
       })
       sessionBound = true
-      if (input.openingMessage !== undefined) await this.sessions.prompt(sessionId, input.openingMessage)
+      if (input.openingMessage !== undefined) {
+        await this.sessions.prompt(sessionId, planFirst
+          ? planChatPrompt(master.name, input.openingMessage)
+          : input.openingMessage)
+      }
       return chat
     } catch (error) {
       let failure = error
@@ -601,9 +641,72 @@ export class HanaiService {
     return chat
   }
 
+  private getExpertChatDetail(id: string): import('../../contracts/src/index.ts').ExpertChatDetail {
+    const expertChat = this.getExpertChat(id)
+    const row = this.database.listResearchPlanRows(id, 'expert-chat')[0]
+    const plan = row === undefined || expertChat.dshSessionId === null ? null : this.researchPlans.readSealedForExpertChat(
+      expertChat, row.version, row.relative_path,
+    )
+    return { expertChat, plan }
+  }
+
+  private async finalizeChatPlan(chatId: string): Promise<void> {
+    const chat = this.database.getExpertChat(chatId)
+    if (chat === null || chat.planStatus !== 'planning' || chat.dshSessionId === null) return
+    const sessionId = chat.dshSessionId
+    const existingRows = this.database.listResearchPlanRows(chatId, 'expert-chat')
+    if (existingRows.length > 0) {
+      this.database.commitResearchPlan(existingRows[0]!, { planStatus: 'ready' })
+      await this.sessions.prompt(sessionId, chatResearchPrompt(chat.masterName))
+      return
+    }
+    try {
+      const owner: ResearchPlanOwner = {
+        ownerType: 'expert-chat', ownerId: chat.id, judgementId: null,
+        masterId: chat.masterId, masterVersion: chat.masterVersion, dshSessionId: sessionId,
+      }
+      const sealed = this.researchPlans.seal(owner, 1)
+      this.database.commitResearchPlan({
+        owner_type: sealed.ownerType ?? 'judgement',
+        owner_id: sealed.ownerId ?? chat.id,
+        judgement_id: sealed.judgementId,
+        version: sealed.version,
+        relative_path: sealed.relativePath,
+        sha256: sealed.sha256,
+        size_bytes: sealed.sizeBytes,
+        sealed_at: sealed.sealedAt,
+        master_id: chat.masterId,
+        master_version: chat.masterVersion,
+        dsh_session_id: sessionId,
+      }, { planStatus: 'ready' })
+      await this.sessions.prompt(sessionId, chatResearchPrompt(chat.masterName))
+    } catch (error) {
+      if (!(error instanceof ResearchPlanValidationError)) throw error
+      const attempts = this.database.getPlanRepairAttempts(chatId, 'expert-chat')
+      if (attempts >= 1) {
+        this.failExpertChat(chatId, error.code, error.message)
+        return
+      }
+      this.database.updateExpertChat(chatId, {
+        turnStatus: 'queued', planRepairAttempts: attempts + 1,
+        errorCode: error.code, errorMessage: error.message,
+      })
+      await this.sessions.prompt(sessionId, chatPlanRepairPrompt(error.message))
+    }
+  }
+
+  private failExpertChat(chatId: string, code: string, message: string): void {
+    try {
+      this.database.updateExpertChat(chatId, { planStatus: 'failed', turnStatus: 'failed', errorCode: code, errorMessage: message })
+    } catch {
+      // Preserve the original error when the business row disappeared during cleanup.
+    }
+  }
+
   private async removeExpertChat(id: string): Promise<HanaiResponse<'expert-chat.remove'>> {
     const chat = this.database.getExpertChat(id)
     if (chat === null) throw new Error('专家对谈不存在')
+    if (chat.planStatus === 'planning' || this.chatPlanJobs.has(id)) throw new Error('研究计划制定中，暂时不能删除')
     if (chat.dshSessionId !== null) {
       if (await this.sessions.isRunning(chat.dshSessionId)) throw new Error('专家正在回答，暂时不能删除')
       await this.sessions.archive(chat.dshSessionId)
@@ -620,6 +723,7 @@ export class HanaiService {
     const master = getMasterPersona(input.masterId)
     if (master === null) throw new Error('大师不存在')
     if (master.chatOnly === true) throw new Error('该专家仅支持开放对谈，不能发起个股研判')
+    const planFirst = master.planFirst === true
     const detail = await this.market.getStockDetail(input.secId, this.database.getSecurity(input.secId))
     this.recordStockDetailSuccess(detail)
     signal.throwIfAborted()
@@ -650,12 +754,20 @@ export class HanaiService {
       createdSessionId = sessionId
       judgement = this.database.updateJudgement(id, {
         dshSessionId: sessionId,
-        reportStatus: 'generating',
+        reportStatus: planFirst ? 'planning' : 'generating',
+        planStatus: planFirst ? 'planning' : 'none',
+        latestPlanVersion: null,
         turnStatus: 'queued',
         repairAttempts: 0,
+        planRepairAttempts: 0,
       })
       sessionBound = true
-      await this.sessions.prompt(sessionId, initialReportPrompt(master.name, code, stockName, input.prompt))
+      await this.sessions.prompt(
+        sessionId,
+        planFirst
+          ? planPrompt(master.name, code, stockName, input.prompt)
+          : initialReportPrompt(master.name, code, stockName, input.prompt),
+      )
       return judgement
     } catch (error) {
       let failure = error
@@ -677,7 +789,7 @@ export class HanaiService {
   private async removeJudgement(id: string): Promise<HanaiResponse<'judgement.remove'>> {
     const judgement = this.database.getJudgement(id)
     if (judgement === null) throw new Error('研判不存在')
-    if (isReportInFlight(judgement) || this.reportJobs.has(id)) {
+    if (isReportInFlight(judgement) || this.reportJobs.has(id) || this.planJobs.has(id)) {
       throw new Error('研判仍在进行中，完成或失败后才能删除')
     }
     if (judgement.dshSessionId !== null) {
@@ -704,7 +816,11 @@ export class HanaiService {
       modelProvider: row.model_provider,
       model: row.model,
     }))
-    return { judgement, reports }
+    const planRow = this.database.listResearchPlanRows(id)[0]
+    const plan = planRow === undefined || judgement.dshSessionId === null ? null : this.researchPlans.readSealedForJudgement(
+      judgement, planRow.version, planRow.relative_path,
+    )
+    return { judgement, reports, plan }
   }
 
   private async reviseJudgement(input: HanaiRequest<'judgement.revise'>): Promise<Judgement> {
@@ -774,6 +890,64 @@ export class HanaiService {
     }
   }
 
+  private enqueuePlanJob(judgementId: string): void {
+    const previous = this.planJobs.get(judgementId) ?? Promise.resolve()
+    const next = previous.then(() => this.finalizePlan(judgementId))
+      .catch((error) => this.failReportAttempt(judgementId, 'plan-finalize-failed', messageOf(error)))
+      .finally(() => {
+        if (this.planJobs.get(judgementId) === next) this.planJobs.delete(judgementId)
+      })
+    this.planJobs.set(judgementId, next)
+  }
+
+  private async finalizePlan(judgementId: string): Promise<void> {
+    let judgement = this.database.getJudgement(judgementId)
+    if (judgement === null || judgement.reportStatus !== 'planning' || judgement.dshSessionId === null) return
+    const sessionId = judgement.dshSessionId
+    const existingRows = this.database.listResearchPlanRows(judgementId, 'judgement')
+    if (existingRows.length > 0) {
+      const existing = existingRows[0]!
+      const updated = this.database.commitResearchPlan(existing, { judgementId, reportStatus: 'generating', planStatus: 'ready' })
+      await this.sessions.prompt(sessionId, researchPrompt((updated as Judgement).masterName))
+      return
+    }
+    judgement = this.database.updateJudgement(judgementId, { turnStatus: 'idle' })
+    try {
+      const sealed = this.researchPlans.seal(judgement, 1)
+      const updated = this.database.commitResearchPlan({
+        owner_type: sealed.ownerType ?? 'judgement',
+        owner_id: sealed.ownerId ?? judgement.id,
+        judgement_id: sealed.judgementId,
+        version: sealed.version,
+        relative_path: sealed.relativePath,
+        sha256: sealed.sha256,
+        size_bytes: sealed.sizeBytes,
+        sealed_at: sealed.sealedAt,
+        master_id: judgement.masterId,
+        master_version: judgement.masterVersion,
+        dsh_session_id: sessionId,
+      }, { judgementId: judgementId, reportStatus: 'generating', planStatus: 'ready' })
+      await this.sessions.prompt(sessionId, researchPrompt((updated as Judgement).masterName))
+    } catch (error) {
+      if (!(error instanceof ResearchPlanValidationError)) throw error
+      const attempts = this.database.getPlanRepairAttempts(judgement.id)
+      if (attempts >= 1) {
+        this.failReportAttempt(judgement, error.code, error.message)
+        return
+      }
+      this.database.updateJudgement(judgement.id, {
+        reportStatus: 'planning',
+        planStatus: 'planning',
+        turnStatus: 'queued',
+        repairAttempts: attempts + 1,
+        planRepairAttempts: attempts + 1,
+        errorCode: error.code,
+        errorMessage: error.message,
+      })
+      await this.sessions.prompt(sessionId, planRepairPrompt(error.message))
+    }
+  }
+
   private failReportAttempt(judgement: Judgement | string, code: string, message: string): void {
     try {
       const current = typeof judgement === 'string' ? this.database.getJudgement(judgement) : judgement
@@ -781,6 +955,7 @@ export class HanaiService {
       this.database.updateJudgement(current.id, {
         // A failed revision must never hide or invalidate an already sealed report.
         reportStatus: current.latestReportVersion === null ? 'failed' : 'ready',
+        ...(current.planStatus === undefined ? {} : { planStatus: current.planStatus === 'planning' ? 'failed' : current.planStatus }),
         turnStatus: 'failed',
         repairAttempts: 0,
         errorCode: code,
@@ -793,7 +968,7 @@ export class HanaiService {
 }
 
 function isReportInFlight(judgement: Judgement): boolean {
-  return ['generating', 'verifying', 'repairing', 'revising'].includes(judgement.reportStatus)
+  return ['planning', 'generating', 'verifying', 'repairing', 'revising'].includes(judgement.reportStatus)
 }
 
 function expertChatTitle(masterName: string, openingMessage?: string): string {
@@ -826,6 +1001,48 @@ function revisionPrompt(instruction: string): string {
 function repairPrompt(reason: string): string {
   return `上一轮 REPORT.md 未通过产品校验：${reason}。这是唯一一次自动修复机会。请立即重新读取大师能力包与研究上下文，`
     + `生成结构完整、内容充分、带一级标题的中文研判报告，覆盖写入 REPORT.md；完成后简短确认。`
+}
+
+function planPrompt(
+  masterName: string,
+  code: string,
+  stockName: string,
+  customPrompt?: string,
+): string {
+  return `你正在 Hanai Worth · 值见的研判工作区中。请先完整读取当前工作区的 AGENTS.md、你的 SKILL.md 和 RESEARCH_CONTEXT.md。\n\n`
+    + `现在请以${masterName}的研究方法，为 ${stockName}（${code}）制定一份单股研究计划，并写入工作区根目录 PLAN.md。`
+    + `计划必须可独立阅读，并至少包含一级标题、产业链位置与稀缺环节判断、证据清单与来源计划、市场可能没看清的地方、失效条件与反证、下一步先查什么。`
+    + `先排产业链层级，再排公司；不要跳过稀缺环节判断直接给结论。严禁编造数据、来源或引文，资料不足时明确标记待验证项。`
+    + `完成 PLAN.md 后，只用一句话向用户确认计划已经完成，不要在回复中重复整份计划。\n\n`
+    + (customPrompt === undefined ? '' : `用户补充要求：\n${customPrompt}\n`)
+}
+
+function planChatPrompt(masterName: string, openingMessage: string): string {
+  return `你正在 Hanai Worth · 值见的专家开放对谈工作区中。请先完整读取当前工作区的 AGENTS.md 和你的 SKILL.md。\n\n`
+    + `你是${masterName}。用户希望围绕以下主题展开 Serenity 式研究：\n${openingMessage}\n\n`
+    + `第一阶段只制定结构化研究计划并写入工作区根目录 PLAN.md，不要直接完成最终研究结论。计划至少包含：系统变化、产业链层级、供应链卡点假设、证据清单、市场可能没看清的地方、反方与失效条件、下一步先查什么。完成后只用一句话确认。`
+}
+
+function chatResearchPrompt(masterName: string): string {
+  return `你正在 Hanai Worth · 值见的专家开放对谈工作区中。请先重新读取已封存的 PLAN.md、当前工作区的 AGENTS.md 和你的 SKILL.md。\n\n`
+    + `现在请以${masterName}的研究方法，按已封存计划继续回答用户的原始主题。先排产业链层级，再找供应链卡点；涉及当前事实时联网核验，区分事实、推断、假设和未知项，给出证据、反方理由、失效条件和下一步验证。不要写 REPORT.md，不给收益承诺或确定性买卖指令。`
+}
+
+function chatPlanRepairPrompt(reason: string): string {
+  return `上一轮 PLAN.md 未通过产品校验：${reason}。这是唯一一次自动修复机会。请重新读取专家能力包，生成结构完整的 Serenity 研究计划并覆盖写入 PLAN.md；完成后简短确认。`
+}
+
+function researchPrompt(masterName: string): string {
+  return `你正在 Hanai Worth · 值见的研判工作区中。请先重新读取已封存的 PLAN.md、当前工作区的 AGENTS.md、你的 SKILL.md 和 RESEARCH_CONTEXT.md。\n\n`
+    + `现在请以${masterName}的研究方法，按研究计划执行本次单股研判。请主动联网检索公司公告、财报、监管披露、行业资料及其他必要的一手或可信来源，获取最新公开信息并交叉核验；不要向用户提问，也不要等待用户补充材料。`
+    + `事实、推断、假设和未知项必须清楚分开；关键事实注明来源链接和日期，关键数字写明口径与日期。严禁编造数据、来源或引文，证据不足时明确标记不确定性。`
+    + `请把完整中文 Markdown 报告覆盖写入工作区根目录 REPORT.md。报告必须可独立阅读，并至少包含一级标题、执行摘要、信息时点与来源、产业链位置与稀缺环节、证据强度分级、财务质量、估值与关键假设或交易条件、催化剂、反方证据、核心风险、乐观/基准/悲观情景、待持续验证清单，以及符合${masterName}框架的最终研判。`
+    + `不要给出收益承诺或伪造精确目标。写入成功后，只用一句话向用户确认报告已经完成，不要在回复中重复整份报告。`
+}
+
+function planRepairPrompt(reason: string): string {
+  return `上一轮 PLAN.md 未通过产品校验：${reason}。这是唯一一次自动修复机会。请立即重新读取大师能力包与研究上下文，`
+    + `生成结构完整、内容充分、带一级标题的中文研究计划，覆盖写入 PLAN.md；完成后简短确认。`
 }
 
 function emptyQuote(secId: string, code: string, name: string): StockQuote {

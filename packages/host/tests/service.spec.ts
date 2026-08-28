@@ -13,9 +13,10 @@ import { fileURLToPath } from 'node:url'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DefaultModelSelection, ProviderMeta, StockDetail } from '../../contracts/src/index.ts'
-import { HanaiDatabase } from '../../domain/src/database.ts'
-import { ensureHanaiLayout, resolveHanaiPaths } from '../../domain/src/paths.ts'
+import { InvestmentDatabase } from '../../domain/src/database.ts'
+import { ensureInvestmentLayout, resolveInvestmentPaths } from '../../domain/src/paths.ts'
 import { ReportStore } from '../../domain/src/reports.ts'
+import { ResearchPlanStore } from '../../domain/src/research-plans.ts'
 import { ExpertChatStore } from '../../domain/src/expert-chats.ts'
 import {
   HanaiService,
@@ -71,11 +72,11 @@ function stockDetail(): StockDetail {
 }
 
 function fixture(minChars = 100) {
-  const root = mkdtempSync(join(tmpdir(), 'hanai-dsh-service-'))
+  const root = mkdtempSync(join(tmpdir(), 'dsh-mode-investment-service-'))
   roots.push(root)
-  const paths = resolveHanaiPaths(root)
-  ensureHanaiLayout(paths)
-  const database = new HanaiDatabase(paths.databasePath)
+  const paths = resolveInvestmentPaths(root)
+  ensureInvestmentLayout(paths)
+  const database = new InvestmentDatabase(paths.databasePath)
   const sessions = new FakeSessions()
   const defaultModel = new FakeDefaultModel()
   const meta = {
@@ -100,12 +101,13 @@ function fixture(minChars = 100) {
     searchSecurities: async () => [],
   }
   const reports = new ReportStore(paths, assets, minChars)
+  const researchPlans = new ResearchPlanStore(paths)
   const expertChats = new ExpertChatStore(paths, assets)
   const openDirectory = vi.fn(async (_directory: string): Promise<void> => {})
   const service = new HanaiService({
-    paths, database, reports, expertChats, sessions, defaultModel, market, version: 'test', openDirectory,
+    paths, database, reports, researchPlans, expertChats, sessions, defaultModel, market, version: 'test', openDirectory,
   })
-  return { database, defaultModel, expertChats, market, openDirectory, paths, reports, service, sessions }
+  return { database, defaultModel, expertChats, market, openDirectory, paths, reports, researchPlans, service, sessions }
 }
 
 function completed(turn = 1): SessionEvent {
@@ -171,6 +173,36 @@ describe('HanaiService report lifecycle', () => {
 
     expect(created).toMatchObject({ title: '与查理·芒格开放对谈', turnStatus: 'idle' })
     expect(sessions.prompts).toEqual([])
+    database.close()
+  })
+
+  it('requires a Serenity topic and seals its discussion plan before the second chat turn', async () => {
+    const { database, researchPlans, service, sessions } = fixture()
+    await expect(service.call('expert-chat.create', {
+      masterId: 'serenity-perspective',
+    }, new AbortController().signal)).rejects.toThrow('必须先提供研究主题')
+
+    const created = await service.call('expert-chat.create', {
+      masterId: 'serenity-perspective',
+      openingMessage: 'AI 服务器电源链的真实卡点是什么？',
+    }, new AbortController().signal)
+    expect(created).toMatchObject({ planStatus: 'planning', turnStatus: 'queued' })
+    expect(sessions.prompts[0]?.text).toContain('第一阶段只制定结构化研究计划')
+
+    writeFileSync(
+      researchPlans.workingPlanPath('expert-chat', created.id),
+      `# AI 服务器电源链研究计划\n\n${'系统变化、产业链层级、供应链卡点、证据清单、反方与失效条件。'.repeat(12)}`,
+    )
+    service.handleSessionEvent(created.dshSessionId!, completed())
+    await eventually(() => expect(database.getExpertChat(created.id)?.planStatus).toBe('ready'))
+    expect(database.listResearchPlanRows(created.id, 'expert-chat')).toHaveLength(1)
+    expect(database.getExpertChat(created.id)?.turnStatus).toBe('queued')
+    expect(sessions.prompts).toHaveLength(2)
+    expect(sessions.prompts[1]?.text).toContain('按已封存计划继续回答')
+
+    const detail = await service.call('expert-chat.get', { id: created.id }, new AbortController().signal)
+    expect(detail.plan?.ownerType).toBe('expert-chat')
+    expect(detail.plan?.content).toContain('# AI 服务器电源链研究计划')
     database.close()
   })
 
@@ -519,6 +551,61 @@ describe('HanaiService report lifecycle', () => {
     const diagnostics = await service.call('diagnostics.get', {}, new AbortController().signal)
     expect(diagnostics.latestMarketSuccess).toBe('2026-08-15T01:02:00.000Z')
     expect(diagnostics.latestValuationSuccess).toBe('2026-08-15T01:03:00.000Z')
+    database.close()
+  })
+
+  it('seals a research plan before the report for a plan-first expert in the same session', async () => {
+    const { database, reports, researchPlans, service, sessions } = fixture()
+    const created = await service.call('judgement.create', {
+      secId: '1.600519', masterId: 'serenity-perspective',
+    }, new AbortController().signal)
+
+    expect(created.reportStatus).toBe('planning')
+    expect(sessions.prompts).toHaveLength(1)
+    expect(sessions.prompts[0]?.text).toContain('写入工作区根目录 PLAN.md')
+    expect(sessions.prompts[0]?.text).toContain('先排产业链层级，再排公司')
+    expect(database.listResearchPlanRows(created.id)).toEqual([])
+    expect(database.listReportRows(created.id)).toEqual([])
+
+    writeFileSync(researchPlans.workingPlanPath(created.id), `# 贵州茅台研究计划\n\n${'产业链位置、稀缺环节、证据清单与失效条件。'.repeat(20)}`)
+    service.handleSessionEvent(created.dshSessionId!, completed())
+    await eventually(() => expect(database.getJudgement(created.id)?.reportStatus).toBe('generating'))
+    expect(database.listResearchPlanRows(created.id)).toHaveLength(1)
+    expect(database.getJudgement(created.id)?.turnStatus).toBe('queued')
+    expect(sessions.prompts).toHaveLength(2)
+    expect(sessions.prompts[1]?.text).toContain('重新读取已封存的 PLAN.md')
+    expect(sessions.prompts[1]?.text).toContain('覆盖写入工作区根目录 REPORT.md')
+
+    const detail = await service.call('judgement.get', { id: created.id }, new AbortController().signal)
+    expect(detail.plan).not.toBeNull()
+    expect(detail.plan?.content).toContain('# 贵州茅台研究计划')
+
+    writeFileSync(reports.workingReportPath(created.id), `# 正式研判\n\n${'事实、推断、风险与验证条件。'.repeat(20)}`)
+    service.handleSessionEvent(created.dshSessionId!, completed(2))
+    await eventually(() => expect(database.getJudgement(created.id)?.reportStatus).toBe('ready'))
+    expect(database.listReportRows(created.id)).toHaveLength(1)
+    expect(database.listResearchPlanRows(created.id)).toHaveLength(1)
+    database.close()
+  })
+
+  it('uses exactly one automatic repair turn before sealing a research plan', async () => {
+    const { database, researchPlans, service, sessions } = fixture()
+    const created = await service.call('judgement.create', {
+      secId: '1.600519', masterId: 'serenity-perspective',
+    }, new AbortController().signal)
+    writeFileSync(researchPlans.workingPlanPath(created.id), '# 太短')
+    service.handleSessionEvent(created.dshSessionId!, completed())
+    await eventually(() => expect(database.getRepairAttempts(created.id)).toBe(1))
+    expect(database.getJudgement(created.id)?.reportStatus).toBe('planning')
+    expect(database.getJudgement(created.id)?.errorCode).toBe('plan-too-short')
+    expect(sessions.prompts).toHaveLength(2)
+    expect(sessions.prompts[1]?.text).toContain('唯一一次自动修复机会')
+
+    writeFileSync(researchPlans.workingPlanPath(created.id), `# 修复后的研究计划\n\n${'产业链位置、稀缺环节、证据清单与失效条件。'.repeat(20)}`)
+    service.handleSessionEvent(created.dshSessionId!, completed(2))
+    await eventually(() => expect(database.getJudgement(created.id)?.reportStatus).toBe('generating'))
+    expect(database.listResearchPlanRows(created.id)).toHaveLength(1)
+    expect(database.getRepairAttempts(created.id)).toBe(0)
     database.close()
   })
 })

@@ -1,15 +1,15 @@
 # Hanai is a Web-surface bundle. The recommended installer composes it into a
-# dedicated `hanai-investment` profile after `dsh-web-app`, leaving `web` intact.
+# dedicated `mode-investment` profile after `dsh-web-app`, leaving `web` intact.
 - id: ui-settings-models
   # Hanai owns the credential and model setup experience. Disabling the stock
   # models surface also prevents its first-run modal from covering Workbench.
   disabled: true
 
 - insert:
-    - id: hanai-investment
-      name: hanai-investment-dsh
+    - id: mode-investment
+      name: dsh-mode-investment
       inject: [connection, apiProxy, sessions, agentDefaultModel]
       config:
-        dataRoot: !!js process.env.HANAI_INVESTMENT_DSH_HOME
+        dataRoot: !!js process.env.DSH_MODE_INVESTMENT_HOME
         requestTimeoutMs: 12000
         reportMinChars: 800

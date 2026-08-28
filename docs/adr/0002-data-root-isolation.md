@@ -13,26 +13,26 @@
 
 ### 1. 双根目录
 
-Hanai 业务数据默认根目录：
+dsh-mode-investment 业务数据默认根目录：
 
 ```text
-~/.hanai-investment-dsh
+~/.dsh-mode-investment
 ```
 
 解析优先级：
 
 1. Bundle/Host 的显式 `dataRoot` 配置；
-2. `HANAI_INVESTMENT_DSH_HOME`；
-3. `~/.hanai-investment-dsh`。
+2. `DSH_MODE_INVESTMENT_HOME`；
+3. `~/.dsh-mode-investment`。
 
 DSH 继续使用当前 `$DSH_HOME`，未设置时为 `~/.dsh`。插件不得修改进程的 `DSH_HOME`，不得在两个根之间复制 Session、附件或凭据。
 
-### 2. Hanai 目录布局
+### 2. dsh-mode-investment 目录布局
 
 ```text
-~/.hanai-investment-dsh/
+~/.dsh-mode-investment/
 ├── db/
-│   └── hanai.sqlite
+│   └── dsh-mode-investment.sqlite
 ├── cache/
 │   ├── market/
 │   └── valuation/
@@ -93,7 +93,7 @@ Hanai SQLite 只保存 opaque `dshSessionId` 作为关联键，不复制消息�
 
 ## 备份与恢复
 
-备份 `~/.hanai-investment-dsh` 可以恢复自选、研判/对谈索引和正式报告，但不能单独恢复研判续聊或专家开放对谈的消息历史。
+备份 `~/.dsh-mode-investment` 可以恢复自选、研判/对谈索引和正式报告，但不能单独恢复研判续聊或专家开放对谈的消息历史。
 
 完整恢复还需要：
 
@@ -121,4 +121,4 @@ Hanai SQLite 只保存 opaque `dshSessionId` 作为关联键，不复制消息�
 
 ## 未来独立发行版
 
-如果未来提供完全独立的 Hanai 桌面启动器，可以为该发行版显式选择专用 DSH Home，例如 `~/.hanai-investment-dsh/dsh-home`。这是发行版部署决策，不是插件默认行为；不能在普通 DSH Profile 中静默切换。
+如果未来提供完全独立的 Hanai 桌面启动器，可以为该发行版显式选择专用 DSH Home，例如 `~/.dsh-mode-investment/dsh-home`。这是发行版部署决策，不是插件默认行为；不能在普通 DSH Profile 中静默切换。

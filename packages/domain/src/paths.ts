@@ -2,7 +2,7 @@ import { chmodSync, lstatSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 
-export interface HanaiPaths {
+export interface InvestmentPaths {
   root: string
   databaseDir: string
   databasePath: string
@@ -15,16 +15,16 @@ export interface HanaiPaths {
   tmpDir: string
 }
 
-/** Resolve only the dedicated DSH-plugin data root; no previous product root is ever probed. */
-export function resolveHanaiPaths(configured?: string): HanaiPaths {
-  const candidate = configured?.trim() || process.env.HANAI_INVESTMENT_DSH_HOME?.trim()
+/** Resolve only the dedicated dsh-mode-investment data root; no previous product root is ever probed. */
+export function resolveInvestmentPaths(configured?: string): InvestmentPaths {
+  const candidate = configured?.trim() || process.env.DSH_MODE_INVESTMENT_HOME?.trim()
   const root = candidate === undefined || candidate === ''
-    ? join(homedir(), '.hanai-investment-dsh')
+    ? join(homedir(), '.dsh-mode-investment')
     : isAbsolute(candidate) ? resolve(candidate) : resolve(process.cwd(), candidate)
   return {
     root,
     databaseDir: join(root, 'db'),
-    databasePath: join(root, 'db', 'hanai.sqlite'),
+    databasePath: join(root, 'db', 'dsh-mode-investment.sqlite'),
     cacheDir: join(root, 'cache'),
     marketCacheDir: join(root, 'cache', 'market'),
     valuationCacheDir: join(root, 'cache', 'valuation'),
@@ -35,7 +35,7 @@ export function resolveHanaiPaths(configured?: string): HanaiPaths {
   }
 }
 
-export function ensureHanaiLayout(paths: HanaiPaths): void {
+export function ensureInvestmentLayout(paths: InvestmentPaths): void {
   const directories = [
     paths.root,
     paths.databaseDir,
@@ -67,7 +67,7 @@ export function ensureHanaiLayout(paths: HanaiPaths): void {
 function assertManagedDirectoryNotSymlink(directory: string): void {
   try {
     if (lstatSync(directory).isSymbolicLink()) {
-      throw new Error(`拒绝使用符号链接作为 Hanai 受管目录：${directory}`)
+      throw new Error(`拒绝使用符号链接作为 investment 受管目录：${directory}`)
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') return

@@ -10,7 +10,7 @@ interface ClientHandoff {
   id: string
 }
 
-const PACKAGE_NAME = 'hanai-investment-dsh'
+const PACKAGE_NAME = 'dsh-mode-investment'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const ADAPTER_FILE = resolve(ROOT, 'tooling/dsh-client-bundle/index.ts')
 const BUNDLE_FILE = resolve(ROOT, 'lib/client.js')

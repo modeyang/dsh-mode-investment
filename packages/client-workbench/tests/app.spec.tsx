@@ -74,6 +74,7 @@ const masters: MasterPersona[] = [
   { id: 'buffett', name: '沃伦 · 巴菲特', shortName: '巴', description: '关注护城河、内在价值与资本配置。', color: '#43bc83', roleTag: '价值投资', tags: ['护城河', '内在价值'], defaultPrompt: '', version: '1.0.0' },
   { id: 'munger', name: '查理 · 芒格', shortName: '芒', description: '坚持多元思维与认知纪律。', color: '#6d98ef', roleTag: '多元思维', tags: ['逆向思考', '纪律'], defaultPrompt: '', version: '1.0.0' },
   { id: 'sun-yuchen-perspective', name: '孙宇晨', shortName: '孙', description: '从行业周期、注意力与叙事竞争观察市场。', color: '#f29d38', roleTag: '行业与注意力周期', tags: ['行业周期', '注意力套利'], defaultPrompt: '', version: '1.0.0', chatOnly: true, personaDisclaimer: '这是基于公开资料构建的 AI 视角模拟，不代表孙宇晨本人观点。', chatStarters: ['“永远缺存储”要验证哪些信号？'] },
+  { id: 'serenity-perspective', name: 'Serenity', shortName: '链', description: '把研究拆成产业链层级，先找供应链卡点再排公司。', color: '#0ea5e9', roleTag: '产业链瓶颈研究', tags: ['供应链卡点', '证据分层', '逆向核验'], defaultPrompt: '', version: '1.0.0', planFirst: true, chatStarters: ['为什么 AI 基建里存储互连可能比算力芯片更早出现瓶颈？先排产业链层级。'] },
 ]
 
 const group: WatchGroup = {
@@ -112,6 +113,8 @@ const readyJudgement: Judgement = {
   completedAt: '2026-08-15T09:10:00+08:00',
   errorCode: null,
   errorMessage: null,
+  planStatus: 'none',
+  latestPlanVersion: null,
 }
 
 const generatingJudgement: Judgement = {
@@ -148,6 +151,8 @@ const expertChat: ExpertChat = {
   updatedAt: '2026-08-15T10:10:00+08:00',
   errorCode: null,
   errorMessage: null,
+  planStatus: 'none',
+  latestPlanVersion: null,
 }
 
 const bootstrap: BootstrapData = {
@@ -161,7 +166,7 @@ const bootstrap: BootstrapData = {
     databasePath: '/tmp/hanai/hanai.db',
     dshHomeOwnedByHost: true,
     securityCount: 1,
-    masterCount: 3,
+    masterCount: 4,
     judgementCount: 2,
     expertChatCount: 1,
     latestMarketSuccess: fresh.fetchedAt,
@@ -866,6 +871,59 @@ describe('HanaiWorkbench old-client parity', () => {
     expect(within(judgementDialog).getByRole('button', { name: /沃伦 · 巴菲特/ })).not.toBeNull()
   })
 
+  it('surfaces Serenity in the expert center, judgement launcher, and sealed research plan', async () => {
+    const { client } = renderAt('/personas')
+    await screen.findByRole('heading', { name: '专家中心' })
+    expect(screen.getByText('Serenity')).not.toBeNull()
+    expect(screen.getByText('产业链瓶颈研究')).not.toBeNull()
+    expect(screen.getAllByText(/供应链卡点/).length).toBeGreaterThan(0)
+    cleanup()
+
+    renderAt('/judgements')
+    await screen.findByRole('heading', { name: '大师研判' })
+    fireEvent.click(screen.getByRole('button', { name: '＋ 新建研判' }))
+    const judgementDialog = await screen.findByRole('dialog', { name: '新建大师研判' })
+    expect(within(judgementDialog).getByRole('button', { name: /Serenity/ })).not.toBeNull()
+    cleanup()
+
+    const planReadyJudgement: Judgement = {
+      ...readyJudgement,
+      id: 'judgement-plan',
+      masterId: 'serenity-perspective',
+      masterName: 'Serenity',
+      dshSessionId: 'session-plan',
+    }
+    const planDetail: JudgementDetail = {
+      judgement: planReadyJudgement,
+      plan: {
+        ownerType: 'judgement',
+        ownerId: planReadyJudgement.id,
+        judgementId: planReadyJudgement.id,
+        version: 1,
+        content: '# 研究计划\n\n产业链位置、稀缺环节、证据清单与失效条件。',
+        sha256: 'plan',
+        sizeBytes: 96,
+        sealedAt: planReadyJudgement.completedAt ?? planReadyJudgement.updatedAt,
+      },
+      reports: [{
+        judgementId: planReadyJudgement.id,
+        version: 1,
+        content: '# 投资结论\n\n价值与风险并重。',
+        sha256: 'test',
+        sizeBytes: 128,
+        sealedAt: planReadyJudgement.completedAt ?? planReadyJudgement.updatedAt,
+        modelProvider: planReadyJudgement.modelProvider,
+        model: planReadyJudgement.model,
+      }],
+    }
+    const planClient = makeClient({ 'judgement.get': () => Promise.resolve(planDetail) })
+    renderAt('/judgements/judgement-plan', planClient)
+    await screen.findByRole('heading', { name: '贵州茅台 600519' })
+    fireEvent.click(screen.getByRole('button', { name: '查看研究计划' }))
+    await screen.findByText('产业链位置、稀缺环节、证据清单与失效条件。')
+    expect(screen.getByRole('heading', { name: 'PLAN.md' })).not.toBeNull()
+  })
+
   it('deep-links an open conversation without repeating the launcher disclosure', async () => {
     renderAt('/expert-chats/chat-ready')
     await screen.findByRole('heading', { name: '专家对谈' })
@@ -984,6 +1042,7 @@ describe('HanaiWorkbench old-client parity', () => {
     }
     const nextDetail: JudgementDetail = {
       judgement: nextJudgement,
+      plan: null,
       reports: [{
         judgementId: nextJudgement.id,
         version: 1,
@@ -1074,7 +1133,7 @@ function makeClient(overrides: Record<string, CallOverride> = {}): HanaiClient {
       case 'judgement.remove': return bootstrap.judgements.filter(item => item.id !== (request as { id: string }).id)
       case 'judgement.get': return detailFor((request as { id: string }).id)
       case 'expert-chat.list': return bootstrap.expertChats
-      case 'expert-chat.get': return bootstrap.expertChats.find(item => item.id === (request as { id: string }).id)
+      case 'expert-chat.get': return { expertChat: bootstrap.expertChats.find(item => item.id === (request as { id: string }).id)!, plan: null }
       case 'expert-chat.create': return { ...expertChat, id: 'chat-created', dshSessionId: 'session-chat-created' }
       case 'expert-chat.remove': return bootstrap.expertChats.filter(item => item.id !== (request as { id: string }).id)
       case 'theme.set': return request
@@ -1115,6 +1174,7 @@ function detailFor(id: string): JudgementDetail {
   const judgement = id === generatingJudgement.id ? generatingJudgement : id === failedJudgement.id ? failedJudgement : readyJudgement
   return {
     judgement,
+    plan: null,
     reports: judgement.reportStatus === 'ready' ? [{
       judgementId: judgement.id,
       version: 1,

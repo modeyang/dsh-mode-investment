@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   BASE_BUNDLE,
   EXPECTED_PROFILE_BUNDLES,
-  HANAI_BUNDLE,
+  MODE_INVESTMENT_BUNDLE,
   WEB_APP_BUNDLE,
   assertComposedLayers,
   assertProfileContract,
@@ -25,11 +25,11 @@ afterEach(() => {
 
 function legacyManifest(): Record<string, unknown> {
   return {
-    name: 'dsh-profile-hanai-investment',
+    name: 'dsh-profile-mode-investment',
     private: true,
     dependencies: {
       [WEB_APP_BUNDLE]: '0.1.0-rc.6',
-      [HANAI_BUNDLE]: 'link:/checkout/hanai-investment-dsh',
+      [MODE_INVESTMENT_BUNDLE]: 'link:/checkout/dsh-mode-investment',
     },
     dsh: {
       profile: {
@@ -45,30 +45,30 @@ describe('Hanai DSH profile contract', () => {
 
     expect(normalized).toMatchObject({
       dependencies: {
-        [HANAI_BUNDLE]: 'link:/checkout/hanai-investment-dsh',
+        [MODE_INVESTMENT_BUNDLE]: 'link:/checkout/dsh-mode-investment',
       },
       dsh: {
         profile: {
-          bundles: [BASE_BUNDLE, WEB_APP_BUNDLE, HANAI_BUNDLE],
+          bundles: [BASE_BUNDLE, WEB_APP_BUNDLE, MODE_INVESTMENT_BUNDLE],
         },
       },
     })
     expect((normalized.dependencies as Record<string, unknown>)).not.toHaveProperty(WEB_APP_BUNDLE)
-    expect(() => assertProfileContract(normalized, 'hanai-investment')).not.toThrow()
+    expect(() => assertProfileContract(normalized, 'mode-investment')).not.toThrow()
   })
 
   it('fails closed for unrelated dependencies or bundle layers', () => {
     const dependencyProfile = legacyManifest()
     ;(dependencyProfile.dependencies as Record<string, unknown>)['another-plugin'] = '1.0.0'
-    expect(() => assertSafeProfileManifest(dependencyProfile, 'hanai-investment')).toThrow(/其他插件/)
+    expect(() => assertSafeProfileManifest(dependencyProfile, 'mode-investment')).toThrow(/其他插件/)
 
     const bundleProfile = legacyManifest()
     ;(((bundleProfile.dsh as Record<string, unknown>).profile as Record<string, unknown>).bundles as string[]).push('another-bundle')
-    expect(() => assertSafeProfileManifest(bundleProfile, 'hanai-investment')).toThrow(/其他组合层/)
+    expect(() => assertSafeProfileManifest(bundleProfile, 'mode-investment')).toThrow(/其他组合层/)
   })
 
   it('rejects a direct web-app dependency even when all bundle names look correct', () => {
-    expect(() => assertProfileContract(legacyManifest(), 'hanai-investment')).toThrow(
+    expect(() => assertProfileContract(legacyManifest(), 'mode-investment')).toThrow(
       /不得是 profile dependency/,
     )
   })

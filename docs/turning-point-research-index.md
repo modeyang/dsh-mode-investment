@@ -38,7 +38,7 @@
 ### 3.1 当前生产规则审计
 
 ```text
-Hanai 当前证券主数据（hanai.sqlite）
+dsh-mode-investment 当前证券主数据（dsh-mode-investment.sqlite）
   ├─ current-market-history-download.py ── 日线缓存 + 沪深 300 基准
   └─ current-native-month-history-download.py ── 原生月线缓存
           ↓
@@ -156,20 +156,20 @@ Vespa314/chan.py @ 429d6ed3… 逐根重放
 
 ```bash
 HANAI_CURRENT_AUDIT_CACHE=/tmp/hanai-current-production-turning-cache-v1
-HANAI_RESEARCH_DB=/absolute/path/to/hanai.sqlite
+DSH_MODE_INVESTMENT_RESEARCH_DB=/absolute/path/to/dsh-mode-investment.sqlite
 
 python3 scripts/research/current-market-history-download.py \
   --cache-dir "$HANAI_CURRENT_AUDIT_CACHE" \
-  --database "$HANAI_RESEARCH_DB"
+  --database "$DSH_MODE_INVESTMENT_RESEARCH_DB"
 
 python3 scripts/research/current-market-history-download.py \
   --cache-dir "$HANAI_CURRENT_AUDIT_CACHE" \
-  --database "$HANAI_RESEARCH_DB" \
+  --database "$DSH_MODE_INVESTMENT_RESEARCH_DB" \
   --benchmark-only
 
 python3 scripts/research/current-native-month-history-download.py \
   --cache-dir "$HANAI_CURRENT_AUDIT_CACHE/native-month" \
-  --database "$HANAI_RESEARCH_DB"
+  --database "$DSH_MODE_INVESTMENT_RESEARCH_DB"
 
 pnpm exec tsx scripts/research/production-turning-point-full-backtest.ts \
   --cache-dir "$HANAI_CURRENT_AUDIT_CACHE" \

@@ -75,7 +75,7 @@ DeepSeek Harness（DSH）负责模型、Agent、工具、Session、流式事件�
 
 变盘点是根据历史条件频率筛选出的**量价观察提示**，不等同于买点、卖点或收益承诺。原有六类在日 K、周 K、月 K 展示各周期独立证据；全市场新增的 `低位破低反包`、金针观察/确认和 `高位巨量长上影`只有日线证据，因此不外推到周/月 K。
 
-> **完整变盘点能力审计**：查看 [GitHub Pages 在线报告](https://hancao97.github.io/hanai-investment-dsh/turning-point-capability-audit-2026-08-23.html) 或 [仓库内自包含 HTML](docs/turning-point-capability-audit-2026-08-23.html)。报告逐一对账当前 10 类生产标记、22 个有效周期格、16 个冻结候选、matched 增量、置信区间及拟影子验证方向。
+> **完整变盘点能力审计**：查看 [GitHub Pages 在线报告](https://modeyang.github.io/dsh-mode-investment/turning-point-capability-audit-2026-08-23.html) 或 [仓库内自包含 HTML](docs/turning-point-capability-audit-2026-08-23.html)。报告逐一对账当前 10 类生产标记、22 个有效周期格、16 个冻结候选、matched 增量、置信区间及拟影子验证方向。
 
 ### 变盘点如何计算
 
@@ -140,15 +140,17 @@ DeepSeek Harness（DSH）负责模型、Agent、工具、Session、流式事件�
 - **不必先选股票**：可直接讨论行业周期、商业模式、市场情绪、决策困境或近期事件，不生成 `REPORT.md`。
 - **持久开放会话**：每次对谈绑定独立专家快照与 DSH Session，支持正常追问、检索、工具调用、队列、steer、取消、审批和历史恢复。
 - **专用对谈工作台**：左侧保留对谈历史，右侧消息区占满剩余高度；支持深链接和刷新恢复，思考与工具过程默认折叠，输入区固定在当前会话底部。
-- **五位对谈专家**：段永平、混江龙、查理·芒格、沃伦·巴菲特均支持研判与开放对谈；孙宇晨视角仅进入开放对谈。
+- **六位对谈专家**：段永平、混江龙、查理·芒格、沃伦·巴菲特、Serenity 均支持研判与开放对谈；孙宇晨视角仅进入开放对谈。
 - **孙宇晨视角边界**：参考用户指定的[开源能力包](https://github.com/alchaincyf/nuwa-skill/tree/main/examples/sun-yuchen-perspective)，用于分析行业周期、注意力迁移和叙事竞争；创建对谈时明确提示 AI 模拟边界，首次回答完成身份披露，详情页不重复占用消息空间；具体时效事实必须先检索核验。
+- **Serenity 式瓶颈研究**：参考 [serenity-skill](https://github.com/muxuuu/serenity-skill)（MIT）的公开方法论，先排产业链层级、找供应链卡点，再排公司；所有公司判断回到公告、财报、问询函与监管/项目文件。
 - **周期可证伪**：“永远缺某种资源”只作为假设，从需求、供给、库存与利用率、资本开支、价格利润和拥挤度检查，并给出反证与失效条件。
 - **单一事实源**：Hanai SQLite 只保存标题、专家和 opaque `dshSessionId`；消息、工具与 Turn 历史仍只在 DSH。
 
 ### 大师研判与持续对话
 
-- **单专家独立研判**：支持段永平、查理·芒格、沃伦·巴菲特和混江龙四套方法论；每次研判绑定独立工作区和持久 DSH Session。
-- **可核验报告**：保留 preparing → running → verifying → completed/failed 状态、实时执行过程、失败原因、归档信息、不可变报告版本、哈希与文件大小。
+- **单专家独立研判**：支持段永平、查理·芒格、沃伦·巴菲特、混江龙四套方法论，以及 Serenity 的两阶段产业链瓶颈研判；每次研判绑定独立工作区和持久 DSH Session。
+- **研究计划入库**：Serenity 研判先在同一 Session 制定并封存 `PLAN.md`（研究计划），校验通过后自动进入研究阶段生成并封存 `REPORT.md`；计划与报告同样以 SHA-256 原子封存，详情页可查看已封存的研究计划。
+- **可核验报告**：保留 preparing → planning → generating → verifying → completed/failed 状态、实时执行过程、失败原因、归档信息、不可变报告版本、哈希与文件大小。
 - **报告默认、对话延续**：完成后默认打开研判报告，也可切换到“继续对话”，沿用原 `dshSessionId` 追问；普通追问不会静默创建新报告版本。
 - **Markdown 与过程展示**：报告和对话正确渲染标题、列表、表格、引用、链接、行内代码和代码块；思考与工具活动按轮次紧凑折叠，详细参数和结果按需展开。
 - **运行中交互**：支持排队发送、立即插话、编辑/移除队列消息、取消运行，以及工具批准和结构化问题回复。
@@ -202,16 +204,16 @@ DSH 仍处于 pre-release，rc 之间不承诺兼容。仓库把 Host、Client �
 ## 从源码安装
 
 ```bash
-git clone git@github.com:hanai-labs/worth-dsh.git
-cd worth-dsh
+git clone git@github.com:modeyang/dsh-mode-investment.git
+cd dsh-mode-investment
 pnpm install
 pnpm run build
 pnpm run profile:install -- --package .
 pnpm run profile:verify
-dsh --profile hanai-investment
+dsh --profile mode-investment
 ```
 
-安装器会创建或安全迁移独立的 `hanai-investment` Profile。最终 Bundle 顺序固定为 DSH Base、DSH Web App、Hanai；只有 `hanai-investment-dsh` 是 Profile dependency。Base 与 Web App 必须由当前 DSH CLI 的 installation fallback 提供，不能再用 `dsh plugin add @deepseek-ai/dsh-web-app` 安装到 Profile，否则相同版本的 DSH runtime 仍可能被加载成两个模块实例。安装器会拒绝修改 `web`、`headless` 等保留 Profile，也会在目标 Profile 含无关依赖或 Bundle 时停止。
+安装器会创建或安全迁移独立的 `mode-investment` Profile。最终 Bundle 顺序固定为 DSH Base、DSH Web App、Hanai；只有 `dsh-mode-investment` 是 Profile dependency。Base 与 Web App 必须由当前 DSH CLI 的 installation fallback 提供，不能再用 `dsh plugin add @deepseek-ai/dsh-web-app` 安装到 Profile，否则相同版本的 DSH runtime 仍可能被加载成两个模块实例。安装器会拒绝修改 `web`、`headless` 等保留 Profile，也会在目标 Profile 含无关依赖或 Bundle 时停止。
 
 通用 DSH Web 仍按原方式启动：
 
@@ -227,20 +229,20 @@ dsh web
 
 ```bash
 pnpm run build
-pnpm run profile:install -- --package hanai-investment-dsh
+pnpm run profile:install -- --package dsh-mode-investment
 pnpm run profile:verify
-dsh --profile hanai-investment
+dsh --profile mode-investment
 ```
 
-迁移前请先停止正在运行的 `dsh --profile hanai-investment` 进程。不要手工执行 `dsh plugin ... add @deepseek-ai/dsh-web-app`；它会重新引入 Profile-local DSH runtime shadow。
+迁移前请先停止正在运行的 `dsh --profile mode-investment` 进程。不要手工执行 `dsh plugin ... add @deepseek-ai/dsh-web-app`；它会重新引入 Profile-local DSH runtime shadow。
 
 ## 数据与隐私
 
 Hanai 业务数据默认写入：
 
 ```text
-~/.hanai-investment-dsh/
-├── db/hanai.sqlite
+~/.dsh-mode-investment/
+├── db/dsh-mode-investment.sqlite
 ├── cache/
 ├── judgements/<id>/workspace/
 ├── judgements/<id>/reports/<version>/
@@ -300,7 +302,7 @@ pnpm run check
 - DSH Client ModuleLoader 单文件协议；
 - npm allowlist、入口、source map、大师资产与旧数据路径硬隔离。
 
-真实装配验证使用临时 `DSH_HOME` 安装 `hanai-investment` Profile，再以随机 loopback 端口启动 Host/Web；不会触碰用户的官方 `web` Profile。
+真实装配验证使用临时 `DSH_HOME` 安装 `mode-investment` Profile，再以随机 loopback 端口启动 Host/Web；不会触碰用户的官方 `web` Profile。
 
 完整的已验证启动步骤、首次设置、浏览器矩阵和故障排查见 [启动与验收报告](docs/startup-and-verification.md)。逐页功能与布局约束见 [客户端迁移与验收基线](docs/client-parity.md)。
 
@@ -313,7 +315,7 @@ packages/
 ├── host/               Cordis Host、/hanai RPC、DSH Session 编排
 ├── client-workbench/   全屏 React 产品工作台
 ├── client-chat/        Hanai 自绘 DSH Session 对话
-└── masters/            五位专家的 Skill、能力分流与参考资料
+└── masters/            六位专家的 Skill、能力分流与参考资料
 tooling/
 └── dsh-client-bundle/  树外 DSH Client closure 构建适配器
 scripts/

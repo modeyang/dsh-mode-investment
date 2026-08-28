@@ -14,7 +14,7 @@ import {
 } from './profile-contract.ts'
 
 const args = stripPnpmRunSeparator(process.argv.slice(2))
-let profile = 'hanai-investment'
+let profile = 'mode-investment'
 let dshBin = 'dsh'
 for (let index = 0; index < args.length; index += 1) {
   const argument = args[index]
@@ -37,7 +37,7 @@ if (result.status !== 0) throw new Error(result.stderr || `profile verification 
 const output = `${result.stdout}\n${result.stderr}`
 assertComposedLayers(output)
 assertRuntimeIdentity(profileDirForManifest(manifestPath))
-console.log(`Profile ${profile} has installation-owned DSH runtime packages and the Base → Web app → Hanai bundle stack.`)
+console.log(`Profile ${profile} has installation-owned DSH runtime packages and the Base → Web app → dsh-mode-investment bundle stack.`)
 
 function value(values: string[], index: number, flag: string): string {
   const result = values[index]

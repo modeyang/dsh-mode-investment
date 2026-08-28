@@ -533,6 +533,7 @@
 .status_ready { color: var(--down); border-color: rgba(47, 172, 116, .35); background: var(--down-soft); }
 .status_failed { color: var(--up); border-color: rgba(240, 74, 85, .35); background: var(--up-soft); }
 .status_preparing,
+.status_planning,
 .status_generating,
 .status_verifying,
 .status_repairing,
@@ -617,6 +618,8 @@
 .expertChatHead { display: grid; min-height: 68px; grid-row: 1; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 .expertChatHead h2 { overflow: hidden; margin: 4px 0 0; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .expertChatHead small { display: block; margin-top: 4px; color: var(--faint); font-size: 8px; }
+.expertChatHeadActions { display: flex; align-items: center; gap: 7px; }
+.personaPlanHint { color: var(--gold-strong); }
 .personaDisclaimer { display: flex; align-items: flex-start; gap: 8px; margin: 10px 12px 0; padding: 8px 10px; border: 1px solid rgba(224, 179, 76, .25); border-radius: 7px; background: var(--gold-soft); }
 .personaDisclaimer > span { display: grid; min-width: 23px; height: 18px; place-items: center; border-radius: 4px; color: var(--on-primary); font-size: 8px; font-weight: 700; background: var(--gold); }
 .personaDisclaimer p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.55; }

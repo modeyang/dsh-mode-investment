@@ -3,9 +3,10 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { HanaiDatabase } from '../../domain/src/database.ts'
-import { resolveHanaiPaths, ensureHanaiLayout } from '../../domain/src/paths.ts'
+import { InvestmentDatabase } from '../../domain/src/database.ts'
+import { resolveInvestmentPaths, ensureInvestmentLayout } from '../../domain/src/paths.ts'
 import { ReportStore } from '../../domain/src/reports.ts'
+import { ResearchPlanStore } from '../../domain/src/research-plans.ts'
 import { ExpertChatStore } from '../../domain/src/expert-chats.ts'
 import { MarketDataService } from '../../domain/src/providers/index.ts'
 import {
@@ -16,7 +17,7 @@ import { DshSessionGateway } from './dsh-session.ts'
 import { badRequest, internalError, isHanaiEndpoint, ok, parseHanaiRequest } from './rpc.ts'
 import { HanaiService } from './service.ts'
 
-export const name = 'hanai-investment-dsh'
+export const name = 'dsh-mode-investment'
 export const inject = ['connection', 'apiProxy', 'sessions', 'agentDefaultModel']
 export const VERSION = '0.1.0'
 
@@ -34,12 +35,13 @@ export const Config: z<Config> = z.object({
 
 /** Mount the Host business plane and its loopback-only browser RPC channel. */
 export function apply(ctx: Context, config: Config = {}): void {
-  const paths = resolveHanaiPaths(config.dataRoot)
-  ensureHanaiLayout(paths)
+  const paths = resolveInvestmentPaths(config.dataRoot)
+  ensureInvestmentLayout(paths)
   const assetsRoot = resolveMasterAssetsRoot(import.meta.url)
   validateMasterAssets(assetsRoot)
-  const database = new HanaiDatabase(paths.databasePath)
+  const database = new InvestmentDatabase(paths.databasePath)
   const reports = new ReportStore(paths, assetsRoot, config.reportMinChars ?? 800)
+  const researchPlans = new ResearchPlanStore(paths)
   const expertChats = new ExpertChatStore(paths, assetsRoot)
   const market = new MarketDataService({
     valuationCacheDir: paths.valuationCacheDir,
@@ -50,6 +52,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     paths,
     database,
     reports,
+    researchPlans,
     expertChats,
     sessions: new DshSessionGateway(ctx),
     defaultModel: ctx.agentDefaultModel,
@@ -72,13 +75,13 @@ export function apply(ctx: Context, config: Config = {}): void {
     try {
       service.handleSessionEvent(String(session.id), event)
     } catch (error) {
-      console.error('[hanai-investment-dsh] failed to observe DSH session event:', error)
+      console.error('[dsh-mode-investment] failed to observe DSH session event:', error)
     }
   })
 
-  ctx.effect(() => () => database.close(), 'hanai-investment-dsh: close database')
+  ctx.effect(() => () => database.close(), 'dsh-mode-investment: close database')
   void service.recover().catch((error) => {
-    console.error('[hanai-investment-dsh] recovery failed:', error)
+    console.error('[dsh-mode-investment] recovery failed:', error)
   })
 }
 

@@ -33,12 +33,12 @@
 
 品牌迁移不等于立即破坏运行兼容性。完成独立迁移方案之前，以下标识保持不变：
 
-- npm 包名 `hanai-investment-dsh`；
-- DSH Profile `hanai-investment`；
-- 数据根 `~/.hanai-investment-dsh`；
-- 环境变量 `HANAI_INVESTMENT_DSH_HOME`；
+- npm 包名 `dsh-mode-investment`；
+- DSH Profile `mode-investment`；
+- 数据根 `~/.dsh-mode-investment`；
+- 环境变量 `DSH_MODE_INVESTMENT_HOME`；
 - RPC 路径、已发布入口，以及尚未单独迁移的运行时兼容标识。
 
 因此，文档首次提及兼容标识时应同时说明品牌名；命令、路径、配置键和历史记录不得为了视觉统一而直接替换。
 
-GitHub 仓库使用统一的品牌组织与仓库名：`hanai-labs/worth-dsh` 和 `hanai-labs/worth-desktop`。clone 地址、repository/homepage/bugs 元数据和本地 remote 必须保持一致。
+GitHub 仓库使用统一的项目名：`modeyang/dsh-mode-investment`。clone 地址、repository/homepage/bugs 元数据和本地 remote 必须保持一致。

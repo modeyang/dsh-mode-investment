@@ -4,7 +4,7 @@ import {
 } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import type { Judgement, MasterPersona, ReportVersion, StockDetail } from '../../contracts/src/index.ts'
-import type { HanaiPaths } from './paths.ts'
+import type { InvestmentPaths } from './paths.ts'
 import { installMasterSnapshot } from '../../masters/src/index.ts'
 
 export interface PreparedWorkspace {
@@ -34,7 +34,7 @@ export interface ReportManifest {
 
 export class ReportStore {
   constructor(
-    private readonly paths: HanaiPaths,
+    private readonly paths: InvestmentPaths,
     private readonly assetsRoot: string,
     private readonly minChars: number,
   ) {}

@@ -2,7 +2,8 @@ import { chmodSync, existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 import type {
-  ExpertChat, Judgement, ReportStatus, ReportVersion, SecurityMaster, ThemeId, TurnStatus, WatchGroup,
+  ExpertChat, Judgement, ReportStatus, ReportVersion, ResearchPlanOwnerType, ResearchPlanStatus,
+  SecurityMaster, ThemeId, TurnStatus, WatchGroup,
 } from '../../contracts/src/index.ts'
 
 interface WatchGroupRow {
@@ -41,6 +42,9 @@ interface JudgementRow {
   completed_at: string | null
   error_code: string | null
   error_message: string | null
+  plan_status?: ResearchPlanStatus
+  latest_plan_version?: number | null
+  plan_repair_attempts?: number
 }
 
 interface ExpertChatRow {
@@ -58,6 +62,9 @@ interface ExpertChatRow {
   updated_at: string
   error_code: string | null
   error_message: string | null
+  plan_status?: ResearchPlanStatus
+  latest_plan_version?: number | null
+  plan_repair_attempts?: number
 }
 
 export interface ReportRow {
@@ -71,6 +78,20 @@ export interface ReportRow {
   model: string | null
 }
 
+export interface ResearchPlanRow {
+  owner_type: ResearchPlanOwnerType
+  owner_id: string
+  judgement_id: string | null
+  version: number
+  relative_path: string
+  sha256: string
+  size_bytes: number
+  sealed_at: string
+  master_id: string
+  master_version: string
+  dsh_session_id: string
+}
+
 export interface CreateJudgementRecord {
   id: string
   secId: string
@@ -82,6 +103,7 @@ export interface CreateJudgementRecord {
   modelProvider?: string
   model?: string
   reasoningEffort?: string
+  planStatus?: ResearchPlanStatus
 }
 
 export interface JudgementUpdate {
@@ -93,6 +115,9 @@ export interface JudgementUpdate {
   errorCode?: string | null
   errorMessage?: string | null
   repairAttempts?: number
+  planStatus?: ResearchPlanStatus
+  latestPlanVersion?: number | null
+  planRepairAttempts?: number
 }
 
 export interface CreateExpertChatRecord {
@@ -104,6 +129,7 @@ export interface CreateExpertChatRecord {
   modelProvider?: string
   model?: string
   reasoningEffort?: string
+  planStatus?: ResearchPlanStatus
 }
 
 export interface ExpertChatUpdate {
@@ -111,6 +137,9 @@ export interface ExpertChatUpdate {
   turnStatus?: TurnStatus
   errorCode?: string | null
   errorMessage?: string | null
+  planStatus?: ResearchPlanStatus
+  latestPlanVersion?: number | null
+  planRepairAttempts?: number
 }
 
 export interface SecuritySnapshotRow extends SecurityMaster {
@@ -118,7 +147,7 @@ export interface SecuritySnapshotRow extends SecurityMaster {
 }
 
 /** SQLite business store. Session messages and credentials deliberately have no tables here. */
-export class HanaiDatabase {
+export class InvestmentDatabase {
   readonly sqlite: DatabaseSync
 
   constructor(readonly path: string) {
@@ -192,7 +221,10 @@ export class HanaiDatabase {
         updated_at TEXT NOT NULL,
         completed_at TEXT,
         error_code TEXT,
-        error_message TEXT
+        error_message TEXT,
+        plan_status TEXT NOT NULL DEFAULT 'none',
+        latest_plan_version INTEGER,
+        plan_repair_attempts INTEGER NOT NULL DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS idx_judgements_updated ON judgements(updated_at DESC);
       CREATE TABLE IF NOT EXISTS report_versions (
@@ -220,10 +252,30 @@ export class HanaiDatabase {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         error_code TEXT,
-        error_message TEXT
+        error_message TEXT,
+        plan_status TEXT NOT NULL DEFAULT 'none',
+        latest_plan_version INTEGER,
+        plan_repair_attempts INTEGER NOT NULL DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS idx_expert_chats_updated ON expert_chats(updated_at DESC);
+      CREATE TABLE IF NOT EXISTS research_plans (
+        owner_type TEXT NOT NULL CHECK (owner_type IN ('judgement', 'expert-chat')),
+        owner_id TEXT NOT NULL,
+        judgement_id TEXT REFERENCES judgements(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        relative_path TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        sealed_at TEXT NOT NULL,
+        master_id TEXT NOT NULL,
+        master_version TEXT NOT NULL,
+        dsh_session_id TEXT NOT NULL,
+        PRIMARY KEY(owner_type, owner_id, version)
+      );
     `)
+    this.ensurePlanColumns()
+    this.ensureResearchPlanTable()
+    this.sqlite.exec('CREATE INDEX IF NOT EXISTS idx_research_plans_owner ON research_plans(owner_type, owner_id, version DESC)')
     const version = this.sqlite.prepare('SELECT MAX(version) AS value FROM schema_migrations').get() as
       | { value: number | null }
       | undefined
@@ -235,7 +287,88 @@ export class HanaiDatabase {
       this.sqlite.prepare('INSERT INTO schema_migrations(version, applied_at) VALUES(2, ?)')
         .run(new Date().toISOString())
     }
+    if ((version?.value ?? 0) < 3) {
+      this.sqlite.prepare('INSERT INTO schema_migrations(version, applied_at) VALUES(3, ?)')
+        .run(new Date().toISOString())
+    }
     this.ensureDefaultWatchGroup()
+  }
+
+  private ensurePlanColumns(): void {
+    for (const table of ['judgements', 'expert_chats'] as const) {
+      const columns = this.sqlite.prepare(`PRAGMA table_info(${table})`).all() as unknown as Array<{ name: string }>
+      const names = new Set(columns.map(column => column.name))
+      if (!names.has('plan_status')) this.sqlite.exec(`ALTER TABLE ${table} ADD COLUMN plan_status TEXT NOT NULL DEFAULT 'none'`)
+      if (!names.has('latest_plan_version')) this.sqlite.exec(`ALTER TABLE ${table} ADD COLUMN latest_plan_version INTEGER`)
+      if (!names.has('plan_repair_attempts')) this.sqlite.exec(`ALTER TABLE ${table} ADD COLUMN plan_repair_attempts INTEGER NOT NULL DEFAULT 0`)
+    }
+  }
+
+  private ensureResearchPlanTable(): void {
+    const columns = this.sqlite.prepare('PRAGMA table_info(research_plans)').all() as unknown as Array<{ name: string }>
+    if (columns.length === 0) return
+    const names = new Set(columns.map(column => column.name))
+    if (names.has('owner_type')) {
+      const required = ['master_id', 'master_version', 'dsh_session_id']
+      if (required.every(column => names.has(column))) return
+      this.sqlite.exec('ALTER TABLE research_plans RENAME TO research_plans_legacy')
+      this.sqlite.exec(`
+        CREATE TABLE research_plans (
+          owner_type TEXT NOT NULL CHECK (owner_type IN ('judgement', 'expert-chat')),
+          owner_id TEXT NOT NULL,
+          judgement_id TEXT REFERENCES judgements(id) ON DELETE CASCADE,
+          version INTEGER NOT NULL,
+          relative_path TEXT NOT NULL,
+          sha256 TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL,
+          sealed_at TEXT NOT NULL,
+          master_id TEXT NOT NULL,
+          master_version TEXT NOT NULL,
+          dsh_session_id TEXT NOT NULL,
+          PRIMARY KEY(owner_type, owner_id, version)
+        );
+        CREATE INDEX idx_research_plans_owner ON research_plans(owner_type, owner_id, version DESC);
+        INSERT INTO research_plans(
+          owner_type, owner_id, judgement_id, version, relative_path, sha256, size_bytes, sealed_at,
+          master_id, master_version, dsh_session_id
+        )
+        SELECT owner_type, owner_id, judgement_id, version, relative_path, sha256, size_bytes, sealed_at,
+          COALESCE((SELECT master_id FROM judgements WHERE id = research_plans_legacy.owner_id), ''),
+          COALESCE((SELECT master_version FROM judgements WHERE id = research_plans_legacy.owner_id), ''),
+          COALESCE((SELECT dsh_session_id FROM judgements WHERE id = research_plans_legacy.owner_id), '')
+        FROM research_plans_legacy;
+        DROP TABLE research_plans_legacy;
+      `)
+      return
+    }
+    this.sqlite.exec('ALTER TABLE research_plans RENAME TO research_plans_legacy')
+    this.sqlite.exec(`
+      CREATE TABLE research_plans (
+        owner_type TEXT NOT NULL CHECK (owner_type IN ('judgement', 'expert-chat')),
+        owner_id TEXT NOT NULL,
+        judgement_id TEXT REFERENCES judgements(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        relative_path TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        sealed_at TEXT NOT NULL,
+        master_id TEXT NOT NULL,
+        master_version TEXT NOT NULL,
+        dsh_session_id TEXT NOT NULL,
+        PRIMARY KEY(owner_type, owner_id, version)
+      );
+      CREATE INDEX idx_research_plans_owner ON research_plans(owner_type, owner_id, version DESC);
+      INSERT INTO research_plans(
+        owner_type, owner_id, judgement_id, version, relative_path, sha256, size_bytes, sealed_at,
+        master_id, master_version, dsh_session_id
+      )
+      SELECT 'judgement', judgement_id, judgement_id, version, relative_path, sha256, size_bytes, sealed_at,
+        COALESCE((SELECT master_id FROM judgements WHERE id = research_plans_legacy.judgement_id), ''),
+        COALESCE((SELECT master_version FROM judgements WHERE id = research_plans_legacy.judgement_id), ''),
+        COALESCE((SELECT dsh_session_id FROM judgements WHERE id = research_plans_legacy.judgement_id), '')
+      FROM research_plans_legacy;
+      DROP TABLE research_plans_legacy;
+    `)
   }
 
   getTheme(): ThemeId {
@@ -492,8 +625,8 @@ export class HanaiDatabase {
       INSERT INTO judgements(
         id, sec_id, code, stock_name, master_id, master_name, master_version,
         report_status, turn_status, model_provider, model, reasoning_effort,
-        created_at, updated_at
-      ) VALUES(?, ?, ?, ?, ?, ?, ?, 'preparing', 'idle', ?, ?, ?, ?, ?)
+        plan_status, created_at, updated_at
+      ) VALUES(?, ?, ?, ?, ?, ?, ?, 'preparing', 'idle', ?, ?, ?, ?, ?, ?)
     `).run(
       input.id,
       input.secId,
@@ -505,6 +638,7 @@ export class HanaiDatabase {
       input.modelProvider ?? null,
       input.model ?? null,
       input.reasoningEffort ?? null,
+      input.planStatus ?? 'none',
       now,
       now,
     )
@@ -528,6 +662,14 @@ export class HanaiDatabase {
       | { repair_attempts: number }
       | undefined
     return row?.repair_attempts ?? 0
+  }
+
+  getPlanRepairAttempts(ownerId: string, ownerType: ResearchPlanOwnerType = 'judgement'): number {
+    const table = ownerType === 'judgement' ? 'judgements' : 'expert_chats'
+    const row = this.sqlite.prepare(`SELECT plan_repair_attempts FROM ${table} WHERE id = ?`).get(ownerId) as
+      | { plan_repair_attempts: number }
+      | undefined
+    return row?.plan_repair_attempts ?? 0
   }
 
   listJudgements(): Judgement[] {
@@ -555,6 +697,9 @@ export class HanaiDatabase {
     if ('errorCode' in update) add('error_code', update.errorCode ?? null)
     if ('errorMessage' in update) add('error_message', update.errorMessage ?? null)
     if ('repairAttempts' in update) add('repair_attempts', update.repairAttempts)
+    if ('planStatus' in update) add('plan_status', update.planStatus)
+    if ('latestPlanVersion' in update) add('latest_plan_version', update.latestPlanVersion ?? null)
+    if ('planRepairAttempts' in update) add('plan_repair_attempts', update.planRepairAttempts)
     add('updated_at', new Date().toISOString())
     const result = this.sqlite.prepare(`UPDATE judgements SET ${fields.join(', ')} WHERE id = ?`).run(...values, id)
     if (result.changes === 0) throw new Error('研判不存在')
@@ -566,8 +711,8 @@ export class HanaiDatabase {
     this.sqlite.prepare(`
       INSERT INTO expert_chats(
         id, title, master_id, master_name, master_version, turn_status,
-        model_provider, model, reasoning_effort, created_at, updated_at
-      ) VALUES(?, ?, ?, ?, ?, 'idle', ?, ?, ?, ?, ?)
+        model_provider, model, reasoning_effort, plan_status, created_at, updated_at
+      ) VALUES(?, ?, ?, ?, ?, 'idle', ?, ?, ?, ?, ?, ?)
     `).run(
       input.id,
       input.title,
@@ -577,6 +722,7 @@ export class HanaiDatabase {
       input.modelProvider ?? null,
       input.model ?? null,
       input.reasoningEffort ?? null,
+      input.planStatus ?? 'none',
       now,
       now,
     )
@@ -611,6 +757,9 @@ export class HanaiDatabase {
     if ('turnStatus' in update) add('turn_status', update.turnStatus)
     if ('errorCode' in update) add('error_code', update.errorCode ?? null)
     if ('errorMessage' in update) add('error_message', update.errorMessage ?? null)
+    if ('planStatus' in update) add('plan_status', update.planStatus)
+    if ('latestPlanVersion' in update) add('latest_plan_version', update.latestPlanVersion ?? null)
+    if ('planRepairAttempts' in update) add('plan_repair_attempts', update.planRepairAttempts)
     add('updated_at', new Date().toISOString())
     const result = this.sqlite.prepare(`UPDATE expert_chats SET ${fields.join(', ')} WHERE id = ?`).run(...values, id)
     if (result.changes === 0) throw new Error('专家对谈不存在')
@@ -618,6 +767,7 @@ export class HanaiDatabase {
   }
 
   removeExpertChat(id: string): void {
+    this.removeResearchPlans(id, 'expert-chat')
     const result = this.sqlite.prepare('DELETE FROM expert_chats WHERE id = ?').run(id)
     if (result.changes === 0) throw new Error('专家对谈不存在')
   }
@@ -666,6 +816,94 @@ export class HanaiDatabase {
     ).all(judgementId) as unknown as ReportRow[]
   }
 
+  /** Insert one sealed research plan snapshot. Cascade delete follows the owner row. */
+  addResearchPlan(record: ResearchPlanRow): void {
+    this.validateResearchPlanRow(record)
+    this.sqlite.prepare(`
+      INSERT INTO research_plans(
+        owner_type, owner_id, judgement_id, version, relative_path, sha256, size_bytes,
+        sealed_at, master_id, master_version, dsh_session_id
+      ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      record.owner_type ?? 'judgement',
+      record.owner_id ?? record.judgement_id,
+      record.judgement_id,
+      record.version,
+      record.relative_path,
+      record.sha256,
+      record.size_bytes,
+      record.sealed_at,
+      record.master_id ?? '',
+      record.master_version ?? '',
+      record.dsh_session_id ?? '',
+    )
+  }
+
+  listResearchPlanRows(ownerId: string, ownerType: ResearchPlanOwnerType = 'judgement'): ResearchPlanRow[] {
+    return this.sqlite.prepare(
+      'SELECT * FROM research_plans WHERE owner_id = ? AND owner_type = ? ORDER BY version DESC',
+    ).all(ownerId, ownerType) as unknown as ResearchPlanRow[]
+  }
+
+  /** Idempotently commit a sealed plan and the next phase in one transaction. */
+  commitResearchPlan(record: ResearchPlanRow, next: {
+    judgementId?: string
+    reportStatus?: ReportStatus
+    planStatus?: ResearchPlanStatus
+  }): Judgement | ExpertChat {
+    this.validateResearchPlanRow(record)
+    let result: Judgement | ExpertChat
+    this.transaction(() => {
+      const ownerType = record.owner_type ?? 'judgement'
+      const ownerId = record.owner_id ?? record.judgement_id
+      if (ownerId === null) throw new Error('研究计划缺少归属标识')
+      const existing = this.sqlite.prepare(
+        'SELECT * FROM research_plans WHERE owner_id = ? AND owner_type = ? AND version = ?',
+      ).get(ownerId, ownerType, record.version) as ResearchPlanRow | undefined
+      if (existing === undefined) this.addResearchPlan(record)
+      else if (!sameResearchPlan(existing, record)) throw new Error('既有研究计划索引校验失败，拒绝覆盖')
+      if (ownerType === 'judgement') {
+        const id = next.judgementId ?? ownerId
+        const update = this.sqlite.prepare(`
+          UPDATE judgements SET report_status = ?, plan_status = ?, latest_plan_version = ?,
+            turn_status = 'queued', repair_attempts = 0, plan_repair_attempts = 0,
+            error_code = NULL, error_message = NULL, updated_at = ? WHERE id = ?
+        `).run(
+          next.reportStatus ?? 'generating', next.planStatus ?? 'ready', record.version,
+          new Date().toISOString(), id,
+        )
+        if (update.changes === 0) throw new Error('研判不存在')
+        result = this.getJudgement(id) as Judgement
+      } else {
+        const update = this.sqlite.prepare(`
+          UPDATE expert_chats SET plan_status = ?, latest_plan_version = ?,
+            plan_repair_attempts = 0, turn_status = 'queued', error_code = NULL, error_message = NULL,
+            updated_at = ? WHERE id = ?
+        `).run(next.planStatus ?? 'ready', record.version, new Date().toISOString(), ownerId)
+        if (update.changes === 0) throw new Error('专家对谈不存在')
+        result = this.getExpertChat(ownerId) as ExpertChat
+      }
+    })
+    return result!
+  }
+
+  removeResearchPlans(ownerId: string, ownerType: ResearchPlanOwnerType): void {
+    this.sqlite.prepare('DELETE FROM research_plans WHERE owner_id = ? AND owner_type = ?').run(ownerId, ownerType)
+  }
+
+  listResearchPlanRowsLegacy(judgementId: string): ResearchPlanRow[] {
+    return this.listResearchPlanRows(judgementId, 'judgement')
+  }
+
+  private validateResearchPlanRow(record: ResearchPlanRow): void {
+    const ownerId = record.owner_id ?? record.judgement_id
+    if (ownerId === null || ownerId.trim() === '') throw new Error('研究计划归属标识不能为空')
+    if (!Number.isSafeInteger(record.version) || record.version < 1) throw new Error('研究计划版本必须是正整数')
+    if (!/^[a-f0-9]{64}$/.test(record.sha256)) throw new Error('研究计划 SHA-256 无效')
+    if (!Number.isSafeInteger(record.size_bytes) || record.size_bytes < 0) throw new Error('研究计划大小无效')
+    if (record.relative_path.trim() === '' || record.relative_path.startsWith('/')) throw new Error('研究计划路径无效')
+  }
+
   listReportMetadata(judgementId: string): Omit<ReportVersion, 'content'>[] {
     return this.listReportRows(judgementId).map(row => ({
       judgementId: row.judgement_id,
@@ -697,6 +935,20 @@ function normalizeGroupName(raw: string): string {
   return value
 }
 
+function sameResearchPlan(left: ResearchPlanRow, right: ResearchPlanRow): boolean {
+  return (left.owner_type ?? 'judgement') === (right.owner_type ?? 'judgement')
+    && (left.owner_id ?? left.judgement_id) === (right.owner_id ?? right.judgement_id)
+    && left.judgement_id === right.judgement_id
+    && left.version === right.version
+    && left.relative_path === right.relative_path
+    && left.sha256 === right.sha256
+    && left.size_bytes === right.size_bytes
+    && left.sealed_at === right.sealed_at
+    && (left.master_id ?? '') === (right.master_id ?? '')
+    && (left.master_version ?? '') === (right.master_version ?? '')
+    && (left.dsh_session_id ?? '') === (right.dsh_session_id ?? '')
+}
+
 function judgementFromRow(row: JudgementRow): Judgement {
   return {
     id: row.id,
@@ -718,6 +970,9 @@ function judgementFromRow(row: JudgementRow): Judgement {
     completedAt: row.completed_at,
     errorCode: row.error_code,
     errorMessage: row.error_message,
+    planStatus: row.plan_status ?? 'none',
+    latestPlanVersion: row.latest_plan_version ?? null,
+    planRepairAttempts: row.plan_repair_attempts ?? 0,
   }
 }
 
@@ -737,5 +992,8 @@ function expertChatFromRow(row: ExpertChatRow): ExpertChat {
     updatedAt: row.updated_at,
     errorCode: row.error_code,
     errorMessage: row.error_message,
+    planStatus: row.plan_status ?? 'none',
+    latestPlanVersion: row.latest_plan_version ?? null,
+    planRepairAttempts: row.plan_repair_attempts ?? 0,
   }
 }

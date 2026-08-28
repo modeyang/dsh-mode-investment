@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Judgement } from '../../contracts/src/index.ts'
 import { getMasterPersona } from '../../masters/src/index.ts'
-import { ensureHanaiLayout, resolveHanaiPaths } from '../src/paths.ts'
+import { ensureInvestmentLayout, resolveInvestmentPaths } from '../src/paths.ts'
 import { ReportStore, ReportValidationError } from '../src/reports.ts'
 
 const roots: string[] = []
@@ -16,10 +16,10 @@ afterEach(() => {
 })
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'hanai-dsh-report-'))
+  const root = mkdtempSync(join(tmpdir(), 'dsh-mode-investment-report-'))
   roots.push(root)
-  const paths = resolveHanaiPaths(root)
-  ensureHanaiLayout(paths)
+  const paths = resolveInvestmentPaths(root)
+  ensureInvestmentLayout(paths)
   return { paths, store: new ReportStore(paths, assets, 100) }
 }
 
@@ -30,6 +30,7 @@ const judgement: Judgement = {
   latestReportVersion: null, modelProvider: 'deepseek-official', model: 'deepseek-chat',
   reasoningEffort: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   completedAt: null, errorCode: null, errorMessage: null,
+  planStatus: 'none', latestPlanVersion: null,
 }
 
 describe('ReportStore', () => {

@@ -6,9 +6,9 @@
 
 ## 1. 结论
 
-Hanai Worth · 值见当前以兼容包名 `hanai-investment-dsh` 实现为一个树外 DeepSeek Harness Bundle。它复用 DSH 的模型、凭据、Agent、Session、会话历史、流式事件和 Web Client 插件机制；Hanai Worth 自己拥有股票、行情、估值、自选、大师研判、专家开放对谈、报告版本和聊天呈现等业务能力。
+Hanai Worth · 值见当前以兼容包名 `dsh-mode-investment` 实现为一个树外 DeepSeek Harness Bundle。它复用 DSH 的模型、凭据、Agent、Session、会话历史、流式事件和 Web Client 插件机制；Hanai Worth 自己拥有股票、行情、估值、自选、大师研判、专家开放对谈、报告版本和聊天呈现等业务能力。
 
-新 UI 全部使用 React 重写，并保留旧版五页基线；2026-08-23 新增一级“专家对谈”，当前导航为“今日市场、自选与发现、大师研判、专家对谈、专家中心、设置与诊断”。个股、研判和对谈详情都是可直接访问的详情路由。`hanai-investment` Profile 启动后在 `shell.overlay` 中自动挂载全屏常驻的 Hanai 工作台；Workbench 自己同步 Hash 路由，因此无需 DSH 新增通用 Router Slot。Hanai 自己渲染消息时间线和 composer，所有轮次仍发送给绑定的 DSH Session。
+新 UI 全部使用 React 重写，并保留旧版五页基线；2026-08-23 新增一级“专家对谈”，当前导航为“今日市场、自选与发现、大师研判、专家对谈、专家中心、设置与诊断”。个股、研判和对谈详情都是可直接访问的详情路由。`mode-investment` Profile 启动后在 `shell.overlay` 中自动挂载全屏常驻的 Hanai 工作台；Workbench 自己同步 Hash 路由，因此无需 DSH 新增通用 Router Slot。Hanai 自己渲染消息时间线和 composer，所有轮次仍发送给绑定的 DSH Session。
 
 该结构不向 Hanai 用户展示 DSH 原生聊天页面，但仍复用 DSH 的 Session 持久化、Agent、队列、取消、恢复和事件流。Hanai 只重写呈现和交互层，不实现第二套 Agent 运行时或聊天存储。
 
@@ -72,18 +72,19 @@ flowchart LR
 | 模型及普通 DSH 设置 | DSH Settings | `$DSH_HOME/settings.yaml` |
 | 会话事件、消息和工具历史 | DSH Session Persistence | `$DSH_HOME/sessions` |
 | 聊天附件 | DSH Attachment Service | `$DSH_HOME/attachments` |
-| 自选、证券主数据、研判与对谈业务索引 | Hanai | `~/.hanai-investment-dsh/db/hanai.sqlite` |
-| 研判工作区 | Hanai | `~/.hanai-investment-dsh/judgements/<id>/workspace` |
-| 正式报告快照 | Hanai | `~/.hanai-investment-dsh/judgements/<id>/reports` |
-| 专家对谈工作区 | Hanai | `~/.hanai-investment-dsh/expert-chats/<id>/workspace` |
-| 行情和估值缓存 | Hanai | `~/.hanai-investment-dsh/cache` |
+| 自选、证券主数据、研判与对谈业务索引 | Hanai | `~/.dsh-mode-investment/db/dsh-mode-investment.sqlite` |
+| 研判工作区 | Hanai | `~/.dsh-mode-investment/judgements/<id>/workspace` |
+| 正式报告快照 | Hanai | `~/.dsh-mode-investment/judgements/<id>/reports` |
+| 研究计划快照 | Hanai | `~/.dsh-mode-investment/judgements/<id>/plans` 或 `expert-chats/<id>/plans` |
+| 专家对谈工作区 | Hanai | `~/.dsh-mode-investment/expert-chats/<id>/workspace` |
+| 行情和估值缓存 | Hanai | `~/.dsh-mode-investment/cache` |
 
 详细规则见 [ADR-0002](adr/0002-data-root-isolation.md)。
 
 ## 4. 仓库结构
 
 ```text
-worth-dsh/
+dsh-mode-investment/
 ├── docs/
 ├── packages/
 │   ├── contracts/              # Host/Client 共享的 JSON-safe TypeScript 合约
@@ -91,7 +92,7 @@ worth-dsh/
 │   ├── host/                   # Cordis Service、Connection RPC、Agent 编排和持久化
 │   ├── client-workbench/       # 侧栏入口、全屏 Hanai 工作台和业务页面
 │   ├── client-chat/            # 报告详情、消息时间线和 composer
-│   └── masters/                # 五位专家 Skill、参考资料、能力分流及版本元数据
+│   └── masters/                # 六位专家 Skill、参考资料、能力分流及版本元数据
 ├── tooling/
 │   └── dsh-client-bundle/      # 锁定 DSH 基线的最小 Client Bundle 构建适配器
 ├── package.json
@@ -115,7 +116,7 @@ DSH 当前没有发布稳定的树外 Client Plugin 构建 SDK。首版在本仓
 - 研判 Session Projection；
 - 大师资源发现与工作区安装器。
 
-插件安装到独立的 `hanai-investment` Profile。Profile 由 DSH Base、Web App 和 Hanai Bundle 组成；官方 `web` Profile 保持不变。Hanai 不覆盖凭据、Session Persistence 或 WebServer，并只禁用会覆盖 Hanai 首次配置体验的原生 Models Onboarding Surface。
+插件安装到独立的 `mode-investment` Profile。Profile 由 DSH Base、Web App 和 dsh-mode-investment Bundle 组成；官方 `web` Profile 保持不变。Hanai 不覆盖凭据、Session Persistence 或 WebServer，并只禁用会覆盖 Hanai 首次配置体验的原生 Models Onboarding Surface。
 
 ### 5.2 Host/Client 边界
 
@@ -128,7 +129,7 @@ DSH 当前没有发布稳定的树外 Client Plugin 构建 SDK。首版在本仓
 
 ### 6.1 入口和页面容器
 
-`client-workbench` 在 `shell.overlay` 注册 Hanai 工作台，并在插件激活后直接显示。生产配置中工作台没有“关闭并返回 DSH”动作；它是 `hanai-investment` Profile 唯一的产品界面。开发配置可以显式启用宿主调试出口，但默认关闭，且不得成为用户导航的一部分。
+`client-workbench` 在 `shell.overlay` 注册 Hanai 工作台，并在插件激活后直接显示。生产配置中工作台没有“关闭并返回 DSH”动作；它是 `mode-investment` Profile 唯一的产品界面。开发配置可以显式启用宿主调试出口，但默认关闭，且不得成为用户导航的一部分。
 
 `shell.overlay` 里的 “shell” 指 DSH 的页面框架，不是命令行 Shell。它是 `ui-layout` 在 Sidebar、Conversation 和 Details 之上声明的一个列表 Slot；Hanai 插件在这个最上层 Slot 中常驻渲染覆盖整个 Frame 的工作台。
 
@@ -191,7 +192,9 @@ Hanai 不创建 `messages` 或 `turns` 表。聊天页从 DSH 历史和实时事
 
 开放对谈拥有独立的 `expert_chats` 业务索引与 `expert-chats/<id>/workspace`，不复用 `judgements` 的证券字段、报告状态机或封存目录。每次创建会复制一份不可变专家 Skill，并写入开放对谈专用 `AGENTS.md`；空白对谈不发送合成用户 prompt，带开场问题时只发送用户原文。
 
-段永平、混江龙、查理·芒格和沃伦·巴菲特支持研判与开放对谈；孙宇晨视角标记为 `chatOnly`，客户端不显示在研判创建器，Host 也拒绝绕过创建。孙宇晨页面持续展示真人模拟声明，Skill 和工作区共同要求时效事实先核验、行业周期给出反证，并禁止把操纵、欺骗或规避监管转化为执行建议。
+段永平、混江龙、查理·芒格、沃伦·巴菲特和 Serenity 支持研判与开放对谈；孙宇晨视角标记为 `chatOnly`，客户端不显示在研判创建器，Host 也拒绝绕过创建。孙宇晨页面持续展示真人模拟声明，Skill 和工作区共同要求时效事实先核验、行业周期给出反证，并禁止把操纵、欺骗或规避监管转化为执行建议。
+
+Serenity 标记为 `planFirst`：其个股研判与开放对谈都在同一 Session 内先制定并封存 `PLAN.md`（研究计划），校验通过后自动进入研究阶段；研判随后生成并封存 `REPORT.md`，开放对谈继续在聊天时间线中回答，不生成报告。研究计划与报告以同一套 SHA-256 原子封存口径入库。
 
 对谈消息、工具与 Turn 历史和研判续聊一样只由 DSH 保存。Hanai SQLite 的标题只是业务导航元数据，不是消息摘要或可独立恢复的会话副本。完整决策见 [ADR-0004](adr/0004-open-expert-conversations.md)。
 
@@ -299,7 +302,7 @@ turnStatus: idle | queued | running | cancelling | failed
 2. 研判工作区保存本次使用的大师 Skill 快照；
 3. 工作区 `AGENTS.md` 对整段 Session 约束大师身份、研究规则和报告文件语义。
 
-如果 DSH 后续为树外 Bundle 提供稳定的 Preset Root Provider，再把四位大师提升为独立 Agent Preset。后续升级不能改变已有 Session 的组合。
+如果 DSH 后续为树外 Bundle 提供稳定的 Preset Root Provider，再把支持研判的五位大师提升为独立 Agent Preset。后续升级不能改变已有 Session 的组合。
 
 ### 7.4 Session 事件与报告协调器
 
@@ -412,7 +415,7 @@ Provider 传输层使用 Node/DSH Host 能力重写，不能继续依赖 Electro
 
 ## 10. 新版初始化与旧版隔离
 
-新版第一次启动时只创建 `~/.hanai-investment-dsh`，以空数据库开始。实现不得对 `~/.hanai-investment` 做存在性检查、目录遍历、数据库读取、文件复制或删除操作，也不提供导入按钮、迁移命令或兼容读取层。
+新版第一次启动时只创建 `~/.dsh-mode-investment`，以空数据库开始。实现不得对 `~/.hanai-investment` 做存在性检查、目录遍历、数据库读取、文件复制或删除操作，也不提供导入按钮、迁移命令或兼容读取层。
 
 旧版应用和目录可以继续独立保留。用户以后手动删除旧版数据属于独立的人工操作，不由本插件提供或触发。
 
@@ -440,7 +443,7 @@ Provider 传输层使用 Node/DSH Host 能力重写，不能继续依赖 Electro
 
 ### 12.2 真实装配测试
 
-- 从发布产物安装 Hanai Bundle 到临时 DSH Profile；
+- 从发布产物安装 dsh-mode-investment Bundle 到临时 DSH Profile；
 - 启动 Host 和 Web Client Plugin；
 - 验证 `shell.overlay` 自动常驻、原生 Conversation 不可见和 Hanai 聊天页面；
 - 验证 Client Bundle 没有第二份 React；
@@ -478,10 +481,10 @@ Provider 传输层使用 Node/DSH Host 能力重写，不能继续依赖 Electro
 
 只有同时满足以下条件，首版才算完成：
 
-1. 用户可以安装 Bundle 并启动 `hanai-investment` Profile，且官方 `dsh web` 不受影响。
+1. 用户可以安装 Bundle 并启动 `mode-investment` Profile，且官方 `dsh web` 不受影响。
 2. 页面可以配置 DeepSeek Key，明文不进入 Hanai 数据目录。
 3. 保留旧版五个一级页面并新增“专家对谈”；个股、研判和对谈详情保留 Hash 深链语义。
-4. 四位大师均可创建研判；五位专家均可创建开放对谈；每次任务有独立工作区和 DSH Session。
+4. 五位大师均可创建研判；六位专家均可创建开放对谈；每次任务有独立工作区和 DSH Session。
 5. 报告校验后形成带 SHA-256 的不可变快照。
 6. 报告和消息时间线出现在 Hanai 自有研判详情页中，不要求显示 DSH 原生聊天。
 7. 用户可以通过 Hanai composer 在同一 Session 继续追问，重启后仍可恢复。

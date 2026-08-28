@@ -129,7 +129,7 @@ function staticPublicationInputs(): string[] {
 
 describe('npm and DSH package manifest', () => {
   it('has the canonical plugin identity and discovery keywords', () => {
-    expect(manifest.name).toBe('hanai-investment-dsh')
+    expect(manifest.name).toBe('dsh-mode-investment')
     expect(manifest.type).toBe('module')
     expect(manifest.main).toBe('./lib/index.js')
     expect(manifest.types).toBe('./lib/index.d.ts')
@@ -173,6 +173,8 @@ describe('npm and DSH package manifest', () => {
     expect(notices).toContain('Apache ECharts bundled d3-derived code — BSD 3-Clause')
     expect(notices).toContain('zrender 5.6.1 — BSD 3-Clause')
     expect(notices).toContain('tslib 2.3.0 — ISC-style license')
+    expect(notices).toContain('serenity-skill `serenity-perspective` — MIT License')
+    expect(notices).toContain('Source: https://github.com/muxuuu/serenity-skill')
     expect(notices).toContain('Copyright 2010-2016 Mike Bostock')
     expect(notices).toContain('Copyright (c) 2017, Baidu Inc.')
     expect(notices).toContain('Copyright (c) Microsoft Corporation.')

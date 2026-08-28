@@ -1,17 +1,17 @@
 {
-  "name": "hanai-investment-dsh",
+  "name": "dsh-mode-investment",
   "version": "0.1.0",
-  "description": "Hanai Worth · 值见 — a local-first A-share value research workbench powered by DeepSeek Harness",
+  "description": "dsh-mode-investment — a local-first A-share value research workbench powered by DeepSeek Harness",
   "type": "module",
   "license": "MIT",
-  "author": "Hanai Worth contributors",
+  "author": "dsh-mode-investment contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hanai-labs/worth-dsh.git"
+    "url": "git+https://github.com/modeyang/dsh-mode-investment.git"
   },
-  "homepage": "https://github.com/hanai-labs/worth-dsh#readme",
+  "homepage": "https://github.com/modeyang/dsh-mode-investment#readme",
   "bugs": {
-    "url": "https://github.com/hanai-labs/worth-dsh/issues"
+    "url": "https://github.com/modeyang/dsh-mode-investment/issues"
   },
   "keywords": [
     "deepseek",

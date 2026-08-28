@@ -22,7 +22,7 @@ export function apply(ctx: ClientContext): void {
   const client = new HanaiClient(ctx)
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
-    id: 'hanai-investment-workbench',
+    id: 'dsh-mode-investment-workbench',
     inject: (): WorkbenchInjected => ({ client }),
   }, WorkbenchRoot))
 }

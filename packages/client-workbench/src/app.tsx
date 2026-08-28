@@ -13,6 +13,7 @@ import type {
   ExpertChat,
   Judgement,
   JudgementDetail,
+  ExpertChatDetail,
   MasterPersona,
   ProviderMeta,
   SearchResult,
@@ -1321,14 +1322,15 @@ function JudgementLauncher({ client, masters, prefill, initialMasterId, onClose,
   }
   return <Modal title="新建大师研判" subtitle="单专家独立执行；完成后形成报告，并可在同一会话中继续追问" onClose={onClose} wide>
     <section className={styles['launcherSection']}><label>研判标的</label><div className={styles['launcherSearch']}><input value={query} disabled={prefill !== null} onChange={event => { setQuery(event.target.value); setSelectedStock(null) }} placeholder="输入股票代码、名称或拼音" />{searching && <span>检索中…</span>}{results.length > 0 && <div>{results.map(stock => <button key={stock.secId} onClick={() => { setSelectedStock(stock); setQuery(`${stock.name} ${stock.code}`); setResults([]) }}><span><b>{stock.name}</b> {stock.code}</span><span>{stock.exchange}</span></button>)}</div>}</div>{selectedStock !== null && <div className={styles['selectedStock']}><span>✓</span><b>{selectedStock.name}</b><span>{selectedStock.code}</span><small>{selectedStock.exchange}</small></div>}</section>
-    <section className={styles['launcherSection']}><label>分析专家（仅可选择一位）</label><div className={styles['launcherMasters']}>{masters.map(master => <button key={master.id} className={masterId === master.id ? styles['masterSelected'] : ''} aria-pressed={masterId === master.id} onClick={() => setMasterId(master.id)}><span style={{ color: master.color, borderColor: master.color }}>{master.shortName}</span><span><b>{master.name}</b><small>{master.roleTag || master.tags.slice(0, 2).join(' · ')}</small></span><em>{masterId === master.id ? '●' : '○'}</em></button>)}</div></section>
+    <section className={styles['launcherSection']}><label>分析专家（仅可选择一位）</label><div className={styles['launcherMasters']}>{masters.map(master => <button key={master.id} className={masterId === master.id ? styles['masterSelected'] : ''} aria-pressed={masterId === master.id} onClick={() => setMasterId(master.id)}><span style={{ color: master.color, borderColor: master.color }}>{master.shortName}</span><span><b>{master.name}</b><small>{master.roleTag || master.tags.slice(0, 2).join(' · ')}</small>{master.planFirst === true && <small className={styles['personaPlanHint']}>先制定并封存研究计划</small>}</span><em>{masterId === master.id ? '●' : '○'}</em></button>)}</div></section>
+    {masters.find(master => master.id === masterId)?.planFirst === true && <div className={styles['launcherHint']}>Serenity 会先制定并封存研究计划，再生成正式研判报告。</div>}
     <footer className={styles['launcherActions']}><button className={`${styles['button']} ${styles['buttonGhost']}`} onClick={onClose}>取消</button><button className={styles['buttonPrimary']} disabled={submitting || selectedStock === null} onClick={() => void submit()}>{submitting ? '正在创建研判…' : '开始研判'}</button></footer>
   </Modal>
 }
 
 function JudgementDetailPage({ client, id, onBack, onRetry, notify }: { client: HanaiClient; id: string; onBack: () => void; onRetry: (stock: SearchResult, masterId: string) => void; notify: Notify }) {
   const [detail, setDetail] = useState<JudgementDetail | null>(null)
-  const [view, setView] = useState<'report' | 'process' | 'chat'>('report')
+  const [view, setView] = useState<'report' | 'plan' | 'process' | 'chat'>('report')
   const routeId = useRef(id)
   const requestGeneration = useRef(0)
   const requestController = useRef<AbortController | null>(null)
@@ -1389,11 +1391,12 @@ function JudgementDetailPage({ client, id, onBack, onRetry, notify }: { client: 
     <PageHeader title={<>{judgement.stockName} <span className={styles['codeText']}>{judgement.code}</span></>} meta={<span>{judgement.masterName} · {dateTime(judgement.createdAt)} · {judgement.model ?? '默认模型'}</span>} action={<><Status status={judgement.reportStatus} />{judgement.reportStatus === 'failed' && <button className={styles['buttonPrimary']} onClick={() => onRetry({ secId: judgement.secId, code: judgement.code, name: judgement.stockName, exchange: exchangeFor(judgement.secId, judgement.code), pinyinFull: '', pinyinInitial: '', price: null, changePct: null }, judgement.masterId)}>重新研判</button>}<button className={`${styles['button']} ${styles['buttonGhost']}`} onClick={onBack}>← 返回</button></>} />
     {judgement.errorMessage !== null && <div className={styles['errorCard']}><b>本次研判未完成</b><span>{judgement.errorMessage}</span></div>}
     {!ready ? <article className={`${styles['card']} ${styles['liveProcess']}`}>
-      <div className={styles['processHead']}><span>{judgement.masterName.slice(0, 1)}</span><div><h2>研判过程</h2><small>{judgement.masterName} 正在分析公开资料</small></div><Status status={judgement.reportStatus} /></div>
+      <div className={styles['processHead']}><span>{judgement.masterName.slice(0, 1)}</span><div><h2>研判过程</h2><small>{judgement.masterName} {judgement.reportStatus === 'planning' ? '正在制定研究计划' : '正在分析公开资料'}</small></div><Status status={judgement.reportStatus} /></div>
       {sessionId === null ? <Empty title="研判会话正在准备" detail="DSH Session 建立后将在这里显示实时执行过程。" /> : <ChatPanel key={`${id}:${sessionId}:live`} clientContext={client.ctx} sessionId={sessionId} title="实时研判过程" compact hideHeader readOnlyReason="报告生成期间仅查看执行过程；报告封存后才可继续对话。" />}
     </article> : <div className={styles['completedLayout']}>
-      <aside className={`${styles['card']} ${styles['archiveInfo']}`}><span className={styles['sectionEyebrow']}>本次研判</span><dl><div><dt>股票</dt><dd>{judgement.stockName} {judgement.code}</dd></div><div><dt>分析专家</dt><dd>{judgement.masterName}</dd></div><div><dt>开始时间</dt><dd>{dateTime(judgement.createdAt)}</dd></div><div><dt>完成时间</dt><dd>{dateTime(judgement.completedAt)}</dd></div><div><dt>模型</dt><dd>{judgement.model ?? '默认模型'}</dd></div><div><dt>报告大小</dt><dd>{formatBytes(report.sizeBytes)}</dd></div></dl><button className={styles['button']} onClick={() => setView(current => current === 'process' ? 'report' : 'process')}>{view === 'process' ? '隐藏' : '查看'}研判过程</button>{sessionId !== null && <button className={styles['buttonPrimary']} onClick={() => setView(current => current === 'chat' ? 'report' : 'chat')}>{view === 'chat' ? '返回报告' : '继续对话'}</button>}</aside>
+      <aside className={`${styles['card']} ${styles['archiveInfo']}`}><span className={styles['sectionEyebrow']}>本次研判</span><dl><div><dt>股票</dt><dd>{judgement.stockName} {judgement.code}</dd></div><div><dt>分析专家</dt><dd>{judgement.masterName}</dd></div><div><dt>开始时间</dt><dd>{dateTime(judgement.createdAt)}</dd></div><div><dt>完成时间</dt><dd>{dateTime(judgement.completedAt)}</dd></div><div><dt>模型</dt><dd>{judgement.model ?? '默认模型'}</dd></div><div><dt>报告大小</dt><dd>{formatBytes(report.sizeBytes)}</dd></div></dl>{currentDetail.plan !== null && <button className={styles['button']} onClick={() => setView(current => current === 'plan' ? 'report' : 'plan')}>{view === 'plan' ? '返回报告' : '查看研究计划'}</button>}<button className={styles['button']} onClick={() => setView(current => current === 'process' ? 'report' : 'process')}>{view === 'process' ? '隐藏' : '查看'}研判过程</button>{sessionId !== null && <button className={styles['buttonPrimary']} onClick={() => setView(current => current === 'chat' ? 'report' : 'chat')}>{view === 'chat' ? '返回报告' : '继续对话'}</button>}</aside>
       {view === 'report' && <article className={`${styles['card']} ${styles['reportCard']}`}><div className={styles['reportHead']}><div><span className={styles['sectionEyebrow']}>分析结果</span><h2>研判报告</h2></div><span className={`${styles['tag']} ${styles['tagReady']}`}>已完成</span></div><MarkdownView content={report.content} /></article>}
+      {view === 'plan' && <article className={`${styles['card']} ${styles['reportCard']}`}><div className={styles['reportHead']}><div><span className={styles['sectionEyebrow']}>研究计划</span><h2>PLAN.md</h2></div><span className={`${styles['tag']} ${styles['tagReady']}`}>已封存</span></div><MarkdownView content={currentDetail.plan!.content} /></article>}
       {view === 'process' && <article className={`${styles['card']} ${styles['archivedProcess']}`}>{sessionId === null ? <Empty title="研判过程不可用" detail="这份归档未关联 DSH Session。" /> : <ChatPanel key={`${id}:${sessionId}:process`} clientContext={client.ctx} sessionId={sessionId} title="研判过程" compact readOnlyReason="已归档的研判过程为只读记录。" />}</article>}
       {view === 'chat' && <article className={`${styles['card']} ${styles['continuedChat']}`}>{sessionId === null ? <Empty title="对话不可用" detail="这份报告未关联 DSH Session。" /> : <ChatPanel key={`${id}:${sessionId}:chat`} clientContext={client.ctx} sessionId={sessionId} title={`继续与${judgement.masterName}对话`} compact />}</article>}
     </div>}
@@ -1402,6 +1405,8 @@ function JudgementDetailPage({ client, id, onBack, onRetry, notify }: { client: 
 
 function ExpertChatsPage({ client, masters, chats, selectedId, onChats, onOpen, onHome, notify }: { client: HanaiClient; masters: MasterPersona[]; chats: ExpertChat[]; selectedId: string | null; onChats: (chats: ExpertChat[]) => void; onOpen: (id: string) => void; onHome: () => void; notify: Notify }) {
   const [items, setItems] = useState(chats)
+  const [selectedDetail, setSelectedDetail] = useState<ExpertChatDetail | null>(null)
+  const [planVisible, setPlanVisible] = useState(false)
   const [launcherOpen, setLauncherOpen] = useState(false)
   const [prefillMasterId, setPrefillMasterId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ExpertChat | null>(null)
@@ -1422,6 +1427,16 @@ function ExpertChatsPage({ client, masters, chats, selectedId, onChats, onOpen, 
   }, [load])
   const selected = selectedId === null ? null : items.find(chat => chat.id === selectedId) ?? null
   const selectedMaster = selected === null ? null : masters.find(master => master.id === selected.masterId) ?? null
+  useEffect(() => {
+    setSelectedDetail(null)
+    setPlanVisible(false)
+    if (selectedId === null) return
+    let active = true
+    void client.call('expert-chat.get', { id: selectedId }).then(detail => {
+      if (active) setSelectedDetail(detail as ExpertChatDetail)
+    }).catch(error => notify(messageOf(error), 'error'))
+    return () => { active = false }
+  }, [client, notify, selectedId])
   const openLauncher = (masterId: string | null = null) => {
     setPrefillMasterId(masterId)
     setLauncherOpen(true)
@@ -1466,18 +1481,23 @@ function ExpertChatsPage({ client, masters, chats, selectedId, onChats, onOpen, 
         <div className={styles['expertChatExpertGrid']}>{masters.map(master => <button key={master.id} onClick={() => openLauncher(master.id)} aria-label={`开始与${master.name}开放对谈`}>
           <span className={styles['personaAvatar']} style={{ color: master.color, borderColor: master.color }}>{master.shortName}</span>
           <span><b>{master.name}</b><small>{master.roleTag}</small></span>
-          {master.chatOnly === true && <em>开放对谈</em>}
+          {master.chatOnly === true && <em>开放对谈</em>}{master.planFirst === true && <em>先计划后研究</em>}
         </button>)}</div>
       </section> : <section className={`${styles['card']} ${styles['expertChatSurface']}`}>
         <header className={styles['expertChatHead']}>
           <span className={styles['personaAvatar']} style={{ color: selectedMaster?.color, borderColor: selectedMaster?.color }}>{selectedMaster?.shortName ?? selected.masterName.slice(0, 1)}</span>
           <div><span className={styles['sectionEyebrow']}>OPEN CONVERSATION</span><h2>{selected.title}</h2><small>{selected.masterName} · {selected.model ?? '默认模型'} · {turnStatusText(selected.turnStatus)}</small></div>
-          <button className={`${styles['button']} ${styles['buttonGhost']}`} onClick={onHome}>全部对谈</button>
+          <div className={styles['expertChatHeadActions']}>
+            {selected.planStatus === 'ready' && selectedDetail !== null && selectedDetail.plan !== null && <button className={styles['button']} onClick={() => setPlanVisible(current => !current)}>{planVisible ? '返回对谈' : '查看研究计划'}</button>}
+            <button className={`${styles['button']} ${styles['buttonGhost']}`} onClick={onHome}>全部对谈</button>
+          </div>
         </header>
         {selected.errorMessage !== null && <div className={styles['expertChatError']}><b>上一轮未完成</b><span>{selected.errorMessage}</span></div>}
-        <div className={styles['expertChatPanel']}>{selected.dshSessionId === null
-          ? <Empty title="对谈会话尚未建立" detail="创建过程未完成；可以删除本记录后重新发起。" />
-          : <ChatPanel key={`${selected.id}:${selected.dshSessionId}`} clientContext={client.ctx} sessionId={selected.dshSessionId} title={`与${selected.masterName}开放对谈`} variant="open-chat" compact hideHeader />}
+        <div className={styles['expertChatPanel']}>{planVisible && selectedDetail !== null && selectedDetail.plan !== null
+          ? <article className={`${styles['card']} ${styles['reportCard']}`}><div className={styles['reportHead']}><div><span className={styles['sectionEyebrow']}>研究计划</span><h2>PLAN.md</h2></div><span className={`${styles['tag']} ${styles['tagReady']}`}>已入库</span></div><MarkdownView content={selectedDetail.plan.content} /></article>
+          : selected.dshSessionId === null
+            ? <Empty title="对谈会话尚未建立" detail="创建过程未完成；可以删除本记录后重新发起。" />
+            : <ChatPanel key={`${selected.id}:${selected.dshSessionId}`} clientContext={client.ctx} sessionId={selected.dshSessionId} title={`与${selected.masterName}开放对谈`} variant="open-chat" compact hideHeader />}
         </div>
       </section>}
     </div>
@@ -1501,8 +1521,10 @@ function ExpertChatLauncher({ client, masters, initialMasterId, onClose, onCreat
   const [openingMessage, setOpeningMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const selected = masters.find(master => master.id === masterId)
+  const planFirst = selected?.planFirst === true
   const submit = async () => {
     if (masterId === '') { notify('请选择一位专家', 'error'); return }
+    if (planFirst && openingMessage.trim() === '') { notify('Serenity 对谈必须先填写研究主题', 'error'); return }
     setSubmitting(true)
     try {
       const message = openingMessage.trim()
@@ -1517,11 +1539,11 @@ function ExpertChatLauncher({ client, masters, initialMasterId, onClose, onCreat
     }
   }
   return <Modal title="新建专家对谈" subtitle="选择一位专家；问题可以跨公司、行业和市场持续展开" onClose={onClose} wide>
-    <section className={styles['launcherSection']}><label>对谈专家</label><div className={styles['launcherMasters']}>{masters.map(master => <button key={master.id} className={masterId === master.id ? styles['masterSelected'] : ''} aria-pressed={masterId === master.id} onClick={() => setMasterId(master.id)}><span style={{ color: master.color, borderColor: master.color }}>{master.shortName}</span><span><b>{master.name}</b><small>{master.roleTag || master.tags.slice(0, 2).join(' · ')}</small></span><em>{masterId === master.id ? '●' : '○'}</em></button>)}</div></section>
-    <section className={styles['launcherSection']}><label htmlFor="expert-chat-opening">开场问题（可选）</label>
+    <section className={styles['launcherSection']}><label>对谈专家</label><div className={styles['launcherMasters']}>{masters.map(master => <button key={master.id} className={masterId === master.id ? styles['masterSelected'] : ''} aria-pressed={masterId === master.id} onClick={() => setMasterId(master.id)}><span style={{ color: master.color, borderColor: master.color }}>{master.shortName}</span><span><b>{master.name}</b><small>{master.roleTag || master.tags.slice(0, 2).join(' · ')}</small>{master.planFirst === true && <small className={styles['personaPlanHint']}>先制定并封存研究计划</small>}</span><em>{masterId === master.id ? '●' : '○'}</em></button>)}</div></section>
+    <section className={styles['launcherSection']}><label htmlFor="expert-chat-opening">开场问题{planFirst ? '（必填）' : '（可选）'}</label>
       {selected?.chatStarters !== undefined && <div className={styles['chatStarterList']}>{selected.chatStarters.map(starter => <button key={starter} onClick={() => setOpeningMessage(starter)}>{starter}</button>)}</div>}
       <textarea id="expert-chat-opening" value={openingMessage} maxLength={4000} onChange={event => setOpeningMessage(event.target.value)} placeholder="例如：为什么这一轮 AI 基础设施里，存储可能比算力更容易出现供需缺口？" />
-      <div className={styles['launcherHint']}><span>留空也可以，进入会话后再提问</span><span>{[...openingMessage].length}/4000</span></div>
+      <div className={styles['launcherHint']}><span>{planFirst ? 'Serenity 会先制定并入库研究计划，再开始研究对谈' : '留空也可以，进入会话后再提问'}</span><span>{[...openingMessage].length}/4000</span></div>
       {selected?.personaDisclaimer !== undefined && <div className={styles['personaDisclaimer']}><span>AI</span><p>{selected.personaDisclaimer}</p></div>}
     </section>
     <footer className={styles['launcherActions']}><button className={`${styles['button']} ${styles['buttonGhost']}`} onClick={onClose}>取消</button><button className={styles['buttonPrimary']} disabled={submitting || masterId === ''} onClick={() => void submit()}>{submitting ? '正在创建对谈…' : openingMessage.trim() === '' ? '创建空白对谈' : '开始对谈'}</button></footer>
@@ -1534,7 +1556,7 @@ function PersonasPage({ masters }: { masters: MasterPersona[] }) {
     <div className={styles['personaGrid']}>{masters.map(master => <article key={master.id} className={`${styles['card']} ${styles['personaCard']}`} aria-label={`${master.name}专家信息`}>
       <header className={styles['personaHead']}>
         <span className={styles['personaAvatar']} style={{ color: master.color, borderColor: master.color }}>{master.shortName}</span>
-        <div className={styles['personaIdentity']}><b>{master.name}</b><div>{master.roleTag && <em className={styles['personaRole']} style={{ color: master.color, borderColor: master.color }}>{master.roleTag}</em>}<small className={styles['personaCapability']}>{master.chatOnly === true ? '仅开放对谈' : '研判 · 开放对谈'}</small></div></div>
+        <div className={styles['personaIdentity']}><b>{master.name}</b><div>{master.roleTag && <em className={styles['personaRole']} style={{ color: master.color, borderColor: master.color }}>{master.roleTag}</em>}<small className={styles['personaCapability']}>{master.chatOnly === true ? '仅开放对谈' : '研判 · 开放对谈'}</small>{master.planFirst === true && <small className={styles['personaPlanHint']}>先制定并封存研究计划</small>}</div></div>
       </header>
       <section className={styles['personaBody']}><label>专家介绍</label><p className={styles['personaDescription']}>{master.description || '暂无介绍'}</p></section>
       {master.tags.length > 0 && <footer className={styles['personaMethods']}><label>核心方法</label><div>{master.tags.map(tag => <span key={tag}>{tag}</span>)}</div></footer>}
@@ -1779,7 +1801,7 @@ function SettingsMetric({ label, value }: { label: string; value: string }) {
 }
 
 function Status({ status }: { status: Judgement['reportStatus'] }) {
-  const labels: Record<Judgement['reportStatus'], string> = { preparing: '正在准备', generating: '研判进行中', verifying: '正在整理报告', repairing: '正在修复报告', ready: '已完成', revising: '正在修订', failed: '未完成' }
+  const labels: Record<Judgement['reportStatus'], string> = { preparing: '正在准备', planning: '制定研究计划', generating: '研判进行中', verifying: '正在整理报告', repairing: '正在修复报告', ready: '已完成', revising: '正在修订', failed: '未完成' }
   return <span className={`${styles['status']} ${styles[`status_${status}`]}`}>{isReportInFlight(status) && <i />}{labels[status]}</span>
 }
 
@@ -2044,7 +2066,7 @@ function signedPriceGap(value: number): string {
 }
 
 function isReportInFlight(status: Judgement['reportStatus']): boolean {
-  return ['preparing', 'generating', 'verifying', 'repairing', 'revising'].includes(status)
+  return ['preparing', 'planning', 'generating', 'verifying', 'repairing', 'revising'].includes(status)
 }
 
 function messageOf(error: unknown): string {

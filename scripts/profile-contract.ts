@@ -13,11 +13,11 @@ import { dirname, join, relative } from 'node:path'
 
 export const BASE_BUNDLE = '@deepseek-ai/dsh-base'
 export const WEB_APP_BUNDLE = '@deepseek-ai/dsh-web-app'
-export const HANAI_BUNDLE = 'hanai-investment-dsh'
+export const MODE_INVESTMENT_BUNDLE = 'dsh-mode-investment'
 export const EXPECTED_PROFILE_BUNDLES = [
   BASE_BUNDLE,
   WEB_APP_BUNDLE,
-  HANAI_BUNDLE,
+  MODE_INVESTMENT_BUNDLE,
 ] as const
 
 type JsonObject = Record<string, unknown>
@@ -46,12 +46,12 @@ export function readManifest(manifestPath: string): JsonObject {
 }
 
 /**
- * Refuse to repurpose a profile that is not already Hanai-owned. The legacy
+ * Refuse to repurpose a profile that is not already mode-investment-owned. The legacy
  * web-app dependency is accepted only so the installer can migrate it away.
  */
 export function assertSafeProfileManifest(manifest: JsonObject, profile: string): void {
   const dependencies = object(manifest.dependencies ?? {}, `${profile}.dependencies`)
-  const allowedDependencies = new Set([WEB_APP_BUNDLE, HANAI_BUNDLE])
+  const allowedDependencies = new Set([WEB_APP_BUNDLE, MODE_INVESTMENT_BUNDLE])
   const unexpectedDependencies = Object.keys(dependencies).filter(name => !allowedDependencies.has(name))
   invariant(
     unexpectedDependencies.length === 0,
@@ -70,7 +70,7 @@ export function assertSafeProfileManifest(manifest: JsonObject, profile: string)
 }
 
 /**
- * Convert both a new custom profile and the legacy Hanai profile to the DSH
+ * Convert both a new custom profile and the legacy mode-investment profile to the DSH
  * installation-owned bundle topology. The Web app remains a bundle layer but
  * is deliberately not a profile dependency.
  */
@@ -78,8 +78,8 @@ export function normalizeProfileManifest(manifest: JsonObject): JsonObject {
   const dependencies = { ...object(manifest.dependencies ?? {}, 'profile.dependencies') }
   delete dependencies[WEB_APP_BUNDLE]
   invariant(
-    typeof dependencies[HANAI_BUNDLE] === 'string' && dependencies[HANAI_BUNDLE] !== '',
-    `profile 尚未安装 ${HANAI_BUNDLE}`,
+    typeof dependencies[MODE_INVESTMENT_BUNDLE] === 'string' && dependencies[MODE_INVESTMENT_BUNDLE] !== '',
+    `profile 尚未安装 ${MODE_INVESTMENT_BUNDLE}`,
   )
 
   const dsh = { ...object(manifest.dsh ?? {}, 'profile.dsh') }
@@ -100,13 +100,13 @@ export function assertProfileContract(manifest: JsonObject, profile: string): vo
     `${WEB_APP_BUNDLE} 不得是 profile dependency；请重新运行 profile:install 完成迁移`,
   )
   invariant(
-    typeof dependencies[HANAI_BUNDLE] === 'string' && dependencies[HANAI_BUNDLE] !== '',
-    `profile ${profile} 缺少 ${HANAI_BUNDLE} dependency`,
+    typeof dependencies[MODE_INVESTMENT_BUNDLE] === 'string' && dependencies[MODE_INVESTMENT_BUNDLE] !== '',
+    `profile ${profile} 缺少 ${MODE_INVESTMENT_BUNDLE} dependency`,
   )
-  const unexpectedDependencies = Object.keys(dependencies).filter(name => name !== HANAI_BUNDLE)
+  const unexpectedDependencies = Object.keys(dependencies).filter(name => name !== MODE_INVESTMENT_BUNDLE)
   invariant(
     unexpectedDependencies.length === 0,
-    `profile ${profile} 含有非 Hanai dependency：${unexpectedDependencies.join(', ')}`,
+    `profile ${profile} 含有非 mode-investment dependency：${unexpectedDependencies.join(', ')}`,
   )
 
   const dsh = object(manifest.dsh, `${profile}.dsh`)
@@ -121,7 +121,7 @@ export function assertProfileContract(manifest: JsonObject, profile: string): vo
 
 /** Atomic manifest replacement; an interrupted write never leaves partial JSON. */
 export function writeManifestAtomic(manifestPath: string, manifest: JsonObject): void {
-  const temporary = `${manifestPath}.hanai-${String(process.pid)}.tmp`
+  const temporary = `${manifestPath}.mode-investment-${String(process.pid)}.tmp`
   const mode = existsSync(manifestPath) ? statSync(manifestPath).mode : 0o644
   try {
     writeFileSync(temporary, `${JSON.stringify(manifest, null, 2)}\n`, { mode })

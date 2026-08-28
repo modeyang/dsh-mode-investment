@@ -1,6 +1,6 @@
 import { pinyin } from 'pinyin-pro'
 import type { SearchResult, SecurityMaster, StockQuote } from '../../contracts/src/index.ts'
-import type { HanaiDatabase, SecuritySnapshotRow } from './database.ts'
+import type { InvestmentDatabase, SecuritySnapshotRow } from './database.ts'
 import { systemClock, type Clock } from './http.ts'
 import type { EastmoneySecurityRow } from './providers/eastmoney.ts'
 
@@ -36,7 +36,7 @@ export class SecuritiesService {
   private readonly minimumSnapshotSize: number
 
   constructor(
-    private readonly database: HanaiDatabase,
+    private readonly database: InvestmentDatabase,
     private readonly provider: SecurityDataProvider,
     options: SecuritiesServiceOptions = {},
   ) {

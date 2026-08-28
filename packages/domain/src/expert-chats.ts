@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, rmSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import type { MasterPersona } from '../../contracts/src/index.ts'
 import { installMasterSnapshot } from '../../masters/src/index.ts'
-import type { HanaiPaths } from './paths.ts'
+import type { InvestmentPaths } from './paths.ts'
 
 export interface PreparedExpertChatWorkspace {
   workspace: string
@@ -12,7 +12,7 @@ export interface PreparedExpertChatWorkspace {
 /** Owns only the expert snapshot/cwd. Conversation history remains in DSH. */
 export class ExpertChatStore {
   constructor(
-    private readonly paths: HanaiPaths,
+    private readonly paths: InvestmentPaths,
     private readonly assetsRoot: string,
   ) {}
 

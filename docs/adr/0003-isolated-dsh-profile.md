@@ -11,20 +11,20 @@ DSH 当前没有 Profile clone 命令；一个自定义 Profile 首次初始化�
 
 ## 决策
 
-发布包提供安装器，默认创建 `hanai-investment` Profile，并把 Bundle 顺序固定为：
+发布包提供安装器，默认创建 `mode-investment` Profile，并把 Bundle 顺序固定为：
 
 1. `@deepseek-ai/dsh-base`；
 2. `@deepseek-ai/dsh-web-app`；
-3. `hanai-investment-dsh`。
+3. `dsh-mode-investment`。
 
-Profile dependencies 只安装 `hanai-investment-dsh`。Base 和 Web App 由 DSH installation fallback 解析，绝不通过 pnpm 写进目标 Profile。安装器会自动迁移早期含 `@deepseek-ai/dsh-web-app` dependency 的 Hanai Profile，并清理其传递依赖；manifest 使用原子替换。安装器拒绝 `web`、`headless`、`node_modules`、`.` 和 `..` 等保留名称；若目标 Profile 已含无关直接依赖或 Bundle，则 fail closed，不继续修改。
+Profile dependencies 只安装 `dsh-mode-investment`。Base 和 Web App 由 DSH installation fallback 解析，绝不通过 pnpm 写进目标 Profile。安装器会自动迁移早期含 `@deepseek-ai/dsh-web-app` dependency 的 Hanai Profile，并清理其传递依赖；manifest 使用原子替换。安装器拒绝 `web`、`headless`、`node_modules`、`.` 和 `..` 等保留名称；若目标 Profile 已含无关直接依赖或 Bundle，则 fail closed，不继续修改。
 
 这样做不只是减少重复依赖。rc.6 的工具调度器使用模块私有的 `Symbol(...)` 协议；若 Profile-local `dsh-tools` 遮蔽 CLI 安装中的 `dsh-tools`，而 `dsh-agent-loop` 仍从 CLI 安装加载，即使版本和文件哈希相同，服务符号也不相等，第一次工具调用会在 scheduler `prepare` 前失败。
 
 正常启动命令为：
 
 ```bash
-dsh --profile hanai-investment
+dsh --profile mode-investment
 ```
 
 原生 DSH Web 仍由以下命令独立启动：

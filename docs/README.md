@@ -1,8 +1,8 @@
 # Hanai Worth · 值见 DSH 设计文档
 
-本文档目录记录 **Hanai Worth · 值见**（当前兼容包名 `hanai-investment-dsh`）的实现架构和关键决策。核心 Host、领域层、React 工作台、自绘 DSH Session 聊天、隔离数据根和独立 Profile 已完成；文档中的“后续”条目表示仍需继续演进的能力。
+本文档目录记录 **Hanai Worth · 值见**（当前兼容包名 `dsh-mode-investment`）的实现架构和关键决策。核心 Host、领域层、React 工作台、自绘 DSH Session 聊天、隔离数据根和独立 Profile 已完成；文档中的“后续”条目表示仍需继续演进的能力。
 
-GitHub Pages 研究站点：<https://hancao97.github.io/hanai-investment-dsh/>
+GitHub Pages 研究站点：历史报告页面路径随仓库项目名更新为 <https://modeyang.github.io/dsh-mode-investment/>
 
 - [变盘点能力审计](https://hancao97.github.io/hanai-investment-dsh/turning-point-capability-audit-2026-08-23.html)
 - [A 股未来一年周期展望（完整门禁版）](https://hancao97.github.io/hanai-investment-dsh/a-share-cycle-outlook.html)
@@ -33,9 +33,11 @@ GitHub Pages 研究站点：<https://hancao97.github.io/hanai-investment-dsh/>
 | [startup-and-verification.md](startup-and-verification.md) | 已实测的安装、启动、数据隔离与浏览器验收报告 | 已验证 |
 | [brand.md](brand.md) | 品牌名称、价值主张、标志语义与兼容边界 | 已确定 |
 | [ADR-0001](adr/0001-dsh-native-react-ui.md) | DSH 规范的 React UI、工作台 Overlay 和 Hanai 自有聊天页面 | 已接受 |
-| [ADR-0002](adr/0002-data-root-isolation.md) | `~/.hanai-investment-dsh` 数据隔离与 DSH 数据所有权 | 已接受 |
-| [ADR-0003](adr/0003-isolated-dsh-profile.md) | 独立 `hanai-investment` Profile，与官方 `dsh web` 并存 | 已接受 |
+| [ADR-0002](adr/0002-data-root-isolation.md) | `~/.dsh-mode-investment` 数据隔离与 DSH 数据所有权 | 已接受 |
+| [ADR-0003](adr/0003-isolated-dsh-profile.md) | 独立 `mode-investment` Profile，与官方 `dsh web` 并存 | 已接受 |
 | [ADR-0004](adr/0004-open-expert-conversations.md) | 不绑定股票或报告的专家开放对谈、DSH Session 所有权与孙宇晨视角边界 | 已接受 |
+| [ADR-0005](adr/0005-serenity-expert-and-research-plan.md) | Serenity 专家、planFirst 两阶段研判与研究计划不可变快照入库 | 已接受 |
+| [serenity-design-and-workflow.md](serenity-design-and-workflow.md) | Serenity 专家定位、使用工作流、研究计划入库规则、已验证能力与优化路线 | 当前实现与后续建议 |
 
 ## 当前已确定的原则
 
@@ -49,6 +51,6 @@ GitHub Pages 研究站点：<https://hancao97.github.io/hanai-investment-dsh/>
 8. 一次专家开放对谈也对应一个独立持久 DSH Session，但不绑定股票、不生成或封存 `REPORT.md`；Hanai 只保存对谈业务索引。
 9. 正式报告是不可变快照；内部版本机制不得被普通追问触发，也不作为未经授权的一级产品能力。
 10. DeepSeek API Key 通过原“设置与诊断”页面内的 DSH Credentials 管理，不进入 Hanai 数据库。
-11. Hanai 业务数据默认写入 `~/.hanai-investment-dsh`，DeepSeek Key、模型设置、Session 日志和附件继续由 `$DSH_HOME` 管理。
+11. Hanai 业务数据默认写入 `~/.dsh-mode-investment`，DeepSeek Key、模型设置、Session 日志和附件继续由 `$DSH_HOME` 管理。
 12. 新版不检测、读取或导入旧版 `~/.hanai-investment`，两个版本从数据层完全独立。
-13. 插件默认安装到 `hanai-investment` Profile；`dsh web` 的官方 `web` Profile 不被修改。
+13. 插件默认安装到 `mode-investment` Profile；`dsh web` 的官方 `web` Profile 不被修改。
