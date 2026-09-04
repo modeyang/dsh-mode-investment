@@ -68,6 +68,17 @@
     "pack:check": "tsx scripts/verify-package.ts",
     "profile:install": "node lib/install-profile.js",
     "profile:verify": "node lib/verify-profile.js",
+    "service": "node lib/service.js",
+    "service:install": "node lib/service.js install",
+    "service:start": "node lib/service.js start",
+    "service:stop": "node lib/service.js stop",
+    "service:restart": "node lib/service.js restart",
+    "service:status": "node lib/service.js status",
+    "service:uninstall": "node lib/service.js uninstall",
+    "start": "pnpm run service:start",
+    "stop": "pnpm run service:stop",
+    "restart": "pnpm run service:restart",
+    "status": "pnpm run service:status",
     "prepare": "pnpm run build"
   },
   "dependencies": {

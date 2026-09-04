@@ -25,7 +25,7 @@ dsh-mode-investment是一个本地优先的 A 股价值研究工作台，以 Dee
 - `packages/client-chat`：研判/对谈的 DSH Session 时间线、composer、队列、steer、取消和审批交互。
 - `packages/masters`：专家 Skill、参考资料、能力元数据和安装/校验资源。
 - `tooling/dsh-client-bundle`：锁定 DSH 版本的 Client Bundle 构建适配器。
-- `scripts`：Profile 安装/校验、发布包校验和可复现研究脚本。
+- `scripts`：Profile 安装/校验、macOS LaunchAgent 后台服务、发布包校验和可复现研究脚本。
 - `docs`：架构、ADR、产品基线、验收证据和研究索引。
 - `tests` 与各 package 下的 `tests`：单元、集成和客户端行为测试。
 
@@ -294,9 +294,17 @@ pnpm run check                  # 完整门禁：typecheck + build + test + pack
 pnpm run profile:install -- --package .
 pnpm run profile:verify
 dsh --profile mode-investment
+
+# macOS 用户级后台服务
+pnpm run service:install
+pnpm start
+pnpm stop
+pnpm restart
+pnpm status
+pnpm run service:uninstall
 ```
 
-运行单个测试时使用 `pnpm exec vitest run <path>`；运行研究脚本前先确认 cutoff 与参数，再使用 `pnpm exec tsx scripts/research/<script>.ts`。Profile 或浏览器行为变化需要在真实 DSH Host/Web 中启动后验收；不要自行启动替代 Web Server 冒充产品验证。
+运行单个测试时使用 `pnpm exec vitest run <path>`；运行研究脚本前先确认 cutoff 与参数，再使用 `pnpm exec tsx scripts/research/<script>.ts`。Profile 或浏览器行为变化需要在真实 DSH Host/Web 中启动后验收；不要自行启动替代 Web Server 冒充产品验证。macOS 后台服务使用 `pnpm run service:*` 管理，不手工编辑 LaunchAgent plist；Profile 安装或迁移前先停止服务，且不得将 API Key 写入服务环境。
 
 ## 任务流程
 

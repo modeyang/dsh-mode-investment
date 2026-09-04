@@ -21,6 +21,7 @@ export default defineConfig([
     entry: {
       'install-profile': 'scripts/install-profile.ts',
       'verify-profile': 'scripts/verify-profile.ts',
+      service: 'scripts/service.ts',
     },
     outDir: 'lib',
     format: 'esm',

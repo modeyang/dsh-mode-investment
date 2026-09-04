@@ -223,6 +223,27 @@ dsh web
 
 两者可以使用不同端口同时运行。详见 [ADR-0003](docs/adr/0003-isolated-dsh-profile.md)。
 
+### macOS 后台服务
+
+项目提供 macOS 用户级 `LaunchAgent`，默认在 `3090` 端口运行 `mode-investment`，登录后自动启动；服务使用 `--no-open`，不会因后台启动反复打开浏览器。首次安装或更新服务配置：
+
+```bash
+pnpm run build
+pnpm run service:install
+```
+
+日常启停与状态查询：
+
+```bash
+pnpm start             # 启动（未安装时会先安装）
+pnpm stop              # 停止并保留服务配置
+pnpm restart           # 重启
+pnpm status            # 查看 launchd 状态
+pnpm run service:uninstall  # 卸载服务，保留日志
+```
+
+也可以使用完整命令：`service:install`、`service:start`、`service:stop`、`service:restart`、`service:status` 和 `service:uninstall`。默认配置文件位于 `~/Library/LaunchAgents/com.modeyang.dsh-mode-investment.plist`，日志位于 `~/Library/Logs/dsh-mode-investment/`。服务使用当前用户的 `launchd` 域；`stop` 会卸载当前 job 但保留 plist，`uninstall` 才会删除 plist。修改端口或项目路径时可传入，例如 `pnpm run service:install -- --port 3091`。
+
 ### 安装发布包或修复旧 Profile
 
 在包含本仓库安装脚本的发布目录中，把 `--package` 换成 npm 包名即可。重复执行是安全的，也会迁移早期错误安装过 Web App dependency 的 Profile：

@@ -85,6 +85,29 @@ dsh web
 
 两个 Profile 可以使用不同端口并行运行。
 
+### 5.1 macOS 后台服务
+
+如需让投资模式作为 macOS 用户级后台服务运行，先构建当前脚本，再安装 LaunchAgent：
+
+```bash
+pnpm run build
+pnpm run service:install
+```
+
+默认服务执行 `dsh --profile mode-investment --port 3090 --no-open`，登录后自动启动。日常命令：
+
+```bash
+pnpm start
+pnpm stop
+pnpm restart
+pnpm status
+pnpm run service:uninstall
+```
+
+完整命令分别对应 `service:install`、`service:start`、`service:stop`、`service:restart`、`service:status`、`service:uninstall`。服务 plist 位于 `~/Library/LaunchAgents/com.modeyang.dsh-mode-investment.plist`，日志位于 `~/Library/Logs/dsh-mode-investment/`。`stop` 使用 `launchctl bootout` 停止并保留 plist；`uninstall` 才删除 plist。LaunchAgent 使用固定绝对路径、当前用户的 `HOME/PATH`、仓库绝对工作目录和 `--no-open`，不把 API Key 写入 plist。
+
+如端口已被占用，安装会失败并将原因写入 `stderr.log`；可先执行 `pnpm stop`，或用 `pnpm run service:install -- --port 3091` 生成其它端口的服务配置。
+
 ## 6. 数据与凭据边界
 
 | 数据 | 所有者 | 默认位置 |

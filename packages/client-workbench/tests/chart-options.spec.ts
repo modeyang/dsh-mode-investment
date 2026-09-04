@@ -170,24 +170,28 @@ describe('legacy-compatible chart options', () => {
     expect(zeroBase.series?.[0]).toMatchObject({ markLine: { data: [{ yAxis: 0 }] } })
   })
 
-  it('uses every K-line bar, dual-grid zoom, volume colors and one compact crosshair tooltip', () => {
-    const bars: KLineBar[] = Array.from({ length: 100 }, (_, index) => ({
-      date: `2026-01-${String(index + 1).padStart(2, '0')}`,
-      open: 10 + index,
-      close: 10 + index + (index % 2 === 0 ? 1 : -1),
-      high: 12 + index,
-      low: 9 + index,
-      volume: 10_000 + index,
-      amount: index === 1 ? null : 100_000 + index,
-    }))
+  it('uses every K-line bar, defaults daily zoom to six months, and keeps dual-grid behavior', () => {
+    const bars: KLineBar[] = Array.from({ length: 400 }, (_, index) => {
+      const date = new Date(Date.UTC(2025, 0, 1))
+      date.setUTCDate(date.getUTCDate() + index)
+      return {
+        date: date.toISOString().slice(0, 10),
+        open: 10 + index,
+        close: 10 + index + (index % 2 === 0 ? 1 : -1),
+        high: 12 + index,
+        low: 9 + index,
+        volume: 10_000 + index,
+        amount: index === 1 ? null : 100_000 + index,
+      }
+    })
     const option = inspect(buildKlineOption(bars))
     const series = option.series ?? []
     const xAxes = option.xAxis as Array<Record<string, unknown>>
     const candleSeries = series.find(item => item.name === 'K 线')
     const volumeSeries = series.find(item => item.name === '成交量')
 
-    expect((xAxes[0]?.data as unknown[])).toHaveLength(100)
-    expect(candleSeries?.data).toHaveLength(100)
+    expect((xAxes[0]?.data as unknown[])).toHaveLength(400)
+    expect(candleSeries?.data).toHaveLength(400)
     expect((candleSeries?.data as number[][])[0]).toEqual([10, 11, 9, 12])
     expect(candleSeries?.markPoint).toBeUndefined()
     expect(series.map(item => item.name)).toEqual(['K 线', 'MA5', 'MA10', '成交量'])
@@ -198,7 +202,7 @@ describe('legacy-compatible chart options', () => {
     expect(option.tooltip?.position).toBeTypeOf('function')
     expect(option.tooltip?.extraCssText).toContain('white-space:normal')
     const tooltip = option.tooltip?.formatter?.([{ seriesName: 'K 线', dataIndex: 1 }]) ?? ''
-    expect(tooltip).toContain('2026-01-02')
+    expect(tooltip).toContain('2025-01-02')
     expect(tooltip).toContain('收盘')
     expect(tooltip).toContain('历史 K · 收盘确认')
     expect(tooltip).toContain('MA5')
@@ -209,9 +213,10 @@ describe('legacy-compatible chart options', () => {
       { axisPointer: { show: true, snap: true } },
       { axisPointer: { show: true, snap: true, label: { show: false } } },
     ])
+    const expectedDailyStart = bars.find(bar => bar.date >= '2025-08-04')?.date
     expect(option.dataZoom).toMatchObject([
-      { type: 'inside', xAxisIndex: [0, 1], start: 55, end: 100 },
-      { type: 'slider', xAxisIndex: [0, 1], start: 55, end: 100, top: '95%', height: 14 },
+      { type: 'inside', xAxisIndex: [0, 1], startValue: expectedDailyStart, endValue: bars.at(-1)?.date },
+      { type: 'slider', xAxisIndex: [0, 1], startValue: expectedDailyStart, endValue: bars.at(-1)?.date, top: '95%', height: 14 },
     ])
     expect((volumeSeries?.data as Array<{ itemStyle: { color: string } }>)[0]?.itemStyle.color).toBe(DARK_CHART_PALETTE.upBar)
     expect((volumeSeries?.data as Array<{ itemStyle: { color: string } }>)[1]?.itemStyle.color).toBe(DARK_CHART_PALETTE.downBar)
@@ -222,6 +227,18 @@ describe('legacy-compatible chart options', () => {
 
     const medium = inspect(buildKlineOption(bars, DARK_CHART_PALETTE, null, 'medium'))
     expect(medium.series?.map(item => item.name)).toEqual(['K 线', 'MA20', 'MA60', '成交量'])
+
+    const shortHistory = inspect(buildKlineOption(bars.slice(-30), DARK_CHART_PALETTE))
+    expect(shortHistory.dataZoom).toMatchObject([
+      { startValue: bars.at(-30)?.date, endValue: bars.at(-1)?.date },
+      { startValue: bars.at(-30)?.date, endValue: bars.at(-1)?.date },
+    ])
+
+    const weekly = inspect(buildKlineOption(bars, DARK_CHART_PALETTE, null, 'short', 'weekly'))
+    expect(weekly.dataZoom).toMatchObject([
+      { start: 55, end: 100 },
+      { start: 55, end: 100 },
+    ])
 
     const preserved = inspect(buildKlineOption(bars, DARK_CHART_PALETTE, {
       startDate: bars[25]?.date ?? '',

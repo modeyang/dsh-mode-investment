@@ -352,10 +352,29 @@ export interface KlineViewWindow {
   endDate: string
 }
 
+const DEFAULT_DAILY_KLINE_MONTHS = 6
 const KLINE_PERIOD_LABEL: Record<KLinePeriod, string> = {
   daily: '日 K',
   weekly: '周 K',
   monthly: '月 K',
+}
+
+function defaultKlineZoomWindow(bars: KLineBar[], period: KLinePeriod): { startValue: string; endValue: string } | { start: number; end: number } {
+  if (period !== 'daily') return { start: 55, end: 100 }
+  const latestDate = bars.at(-1)?.date
+  const earliestDate = bars[0]?.date
+  if (latestDate === undefined || earliestDate === undefined) return { start: 0, end: 100 }
+  const cutoff = new Date(`${latestDate}T00:00:00Z`)
+  const latestDay = cutoff.getUTCDate()
+  cutoff.setUTCDate(1)
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - DEFAULT_DAILY_KLINE_MONTHS)
+  const lastDayOfCutoffMonth = new Date(Date.UTC(cutoff.getUTCFullYear(), cutoff.getUTCMonth() + 1, 0)).getUTCDate()
+  cutoff.setUTCDate(Math.min(latestDay, lastDayOfCutoffMonth))
+  const firstVisibleBar = bars.find(bar => bar.date >= cutoff.toISOString().slice(0, 10))
+  return {
+    startValue: firstVisibleBar?.date ?? earliestDate,
+    endValue: latestDate,
+  }
 }
 
 function klineTooltipPosition(
@@ -538,7 +557,7 @@ export function buildKlineOption(
     : { markers: [], byIndex: bars.map((): KlineTurningMarker[] => []) }
   const turningMarkers = turningStudy.markers
   const zoomWindow = viewWindow === null || viewWindow === undefined
-    ? { start: 55, end: 100 }
+    ? defaultKlineZoomWindow(bars, period)
     : { startValue: viewWindow.startDate, endValue: viewWindow.endDate }
   return {
     tooltip: {
