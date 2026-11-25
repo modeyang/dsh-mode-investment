@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DefaultModelSelection, ProviderMeta, StockDetail } from '../../contracts/src/index.ts'
 import { InvestmentDatabase } from '../../domain/src/database.ts'
@@ -111,7 +111,7 @@ function fixture(minChars = 100) {
 }
 
 function completed(turn = 1): SessionEvent {
-  return { type: 'turn/end', seq: turn, time: Date.now(), data: { turn, reason: { kind: 'completed' } } }
+  return { type: 'turn/end', seq: SessionSeq(turn), time: Date.now(), data: { turn, reason: { kind: 'completed' } } }
 }
 
 async function eventually(assertion: () => void): Promise<void> {
@@ -148,7 +148,7 @@ describe('HanaiService report lifecycle', () => {
     expect(readFileSync(join(workspace, 'AGENTS.md'), 'utf8')).toContain('专家开放对谈工作区')
 
     service.handleSessionEvent(created.dshSessionId!, {
-      type: 'turn/start', seq: 1, time: Date.now(), data: { turn: 1 },
+      type: 'turn/start', seq: SessionSeq(1), time: Date.now(), data: { turn: 1 },
     })
     expect(database.getExpertChat(created.id)?.turnStatus).toBe('running')
     service.handleSessionEvent(created.dshSessionId!, completed())
@@ -217,6 +217,71 @@ describe('HanaiService report lifecycle', () => {
     database.close()
   })
 
+  it('starts Sanhu Yi in both research and open-chat modes with its own complete Skill snapshot', async () => {
+    const { database, paths, service, sessions } = fixture()
+    const signal = new AbortController().signal
+    const masterId = 'sanhu-yi-perspective'
+    const judgement = await service.call('judgement.create', {
+      secId: '1.600519', masterId,
+    }, signal)
+    const chat = await service.call('expert-chat.create', { masterId }, signal)
+
+    expect(judgement).toMatchObject({ masterId, masterName: '散户乙', reportStatus: 'generating' })
+    expect(chat).toMatchObject({ masterId, masterName: '散户乙', turnStatus: 'idle' })
+    expect(chat.dshSessionId).not.toBe(judgement.dshSessionId)
+    expect(sessions.prompts).toHaveLength(1)
+    expect(sessions.prompts[0]!.sessionId).toBe(judgement.dshSessionId)
+    for (const workspace of [
+      join(paths.judgementsDir, judgement.id, 'workspace'),
+      join(paths.expertChatsDir, chat.id, 'workspace'),
+    ]) {
+      const skillRoot = join(workspace, '.agents', 'skills', masterId)
+      expect(readFileSync(join(skillRoot, 'SKILL.md'), 'utf8')).toContain('name: sanhu-yi-perspective')
+      expect(readFileSync(join(skillRoot, 'references', 'provenance.md'), 'utf8')).toContain('493')
+      expect(readFileSync(join(skillRoot, 'references', 'valuation-worked-example.md'), 'utf8')).toContain('ROE')
+    }
+    const chatWorkspace = join(paths.expertChatsDir, chat.id, 'workspace')
+    expect(readFileSync(join(chatWorkspace, 'AGENTS.md'), 'utf8')).toContain('不代表散户乙本人观点')
+    expect(existsSync(join(chatWorkspace, 'REPORT.md'))).toBe(false)
+    database.close()
+  })
+
+  it('runs Dong Taishan in both modes and seals the research report without leaking it into open chat', async () => {
+    const { database, paths, reports, service, sessions } = fixture()
+    const signal = new AbortController().signal
+    const masterId = 'dong-taishan-perspective'
+    const openingMessage = '估值便宜和产业拐点怎样分开判断？'
+    const judgement = await service.call('judgement.create', { secId: '1.600519', masterId }, signal)
+    const chat = await service.call('expert-chat.create', { masterId, openingMessage }, signal)
+
+    expect(judgement).toMatchObject({ masterId, masterName: '东泰山', masterVersion: '2026.10.01-v6', reportStatus: 'generating' })
+    expect(chat).toMatchObject({ masterId, masterName: '东泰山', masterVersion: '2026.10.01-v6', turnStatus: 'queued' })
+    expect(chat.dshSessionId).not.toBe(judgement.dshSessionId)
+    expect(sessions.prompts).toEqual([
+      { sessionId: judgement.dshSessionId, text: expect.stringContaining('以东泰山大师的方法论') },
+      { sessionId: chat.dshSessionId, text: openingMessage },
+    ])
+    for (const workspace of [
+      join(paths.judgementsDir, judgement.id, 'workspace'),
+      join(paths.expertChatsDir, chat.id, 'workspace'),
+    ]) {
+      const skillRoot = join(workspace, '.agents', 'skills', masterId)
+      expect(readFileSync(join(skillRoot, 'SKILL.md'), 'utf8')).toContain('name: dong-taishan-perspective')
+      expect(readFileSync(join(skillRoot, 'references', 'source-manifest.md'), 'utf8')).toContain('P22')
+    }
+    const chatWorkspace = join(paths.expertChatsDir, chat.id, 'workspace')
+    expect(readFileSync(join(chatWorkspace, 'AGENTS.md'), 'utf8')).toContain('不代表本人当前观点')
+    const report = `# 东泰山研判\n\n${'估值位置与产业位置分别判断，盈利质量需核验，列出反证与下一次验证条件。'.repeat(8)}`
+    writeFileSync(reports.workingReportPath(judgement.id), report)
+    service.handleSessionEvent(judgement.dshSessionId!, completed())
+    service.handleSessionEvent(chat.dshSessionId!, completed())
+    await eventually(() => expect(database.getJudgement(judgement.id)?.reportStatus).toBe('ready'))
+    expect(database.listReportRows(judgement.id)).toHaveLength(1)
+    expect(database.getExpertChat(chat.id)?.turnStatus).toBe('idle')
+    expect(existsSync(join(chatWorkspace, 'REPORT.md'))).toBe(false)
+    database.close()
+  })
+
   it('deletes only a settled judgement, archives its session, and removes local report files', async () => {
     const { database, paths, service, sessions } = fixture()
     const created = await service.call('judgement.create', {
@@ -266,7 +331,7 @@ describe('HanaiService report lifecycle', () => {
     expect(database.listReportRows(created.id)).toHaveLength(1)
 
     service.handleSessionEvent(created.dshSessionId!, {
-      type: 'turn/start', seq: 2, time: Date.now(), data: { turn: 2 },
+      type: 'turn/start', seq: SessionSeq(2), time: Date.now(), data: { turn: 2 },
     })
     service.handleSessionEvent(created.dshSessionId!, completed(2))
     expect(database.getJudgement(created.id)?.turnStatus).toBe('idle')
@@ -319,7 +384,7 @@ describe('HanaiService report lifecycle', () => {
 
     service.handleSessionEvent(created.dshSessionId!, {
       type: 'turn/end',
-      seq: 1,
+      seq: SessionSeq(1),
       time: Date.now(),
       data: {
         turn: 1,
@@ -611,6 +676,30 @@ describe('HanaiService report lifecycle', () => {
 })
 
 describe('HanaiService parity endpoints and diagnostics', () => {
+  it('reads unique watch securities locally even when market providers are unavailable', async () => {
+    const { database, market, service } = fixture()
+    try {
+      const security = stockDetail().security!
+      database.sqlite.prepare(`
+        INSERT INTO security_master(sec_id, code, name, exchange, pinyin_full, pinyin_initial, updated_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?)
+      `).run(security.secId, security.code, security.name, security.exchange, security.pinyinFull, security.pinyinInitial, new Date().toISOString())
+      const group = database.listWatchGroups()[0]!
+      const second = database.createWatchGroup('观察组')
+      database.addWatchItem(group.id, security.secId, null)
+      database.addWatchItem(second.id, security.secId, null)
+      database.addWatchItem(second.id, '0.000001', null)
+      const quotes = vi.spyOn(market, 'getQuotes').mockRejectedValue(new Error('offline'))
+      const search = vi.spyOn(market, 'searchSecurities').mockRejectedValue(new Error('offline'))
+
+      await expect(service.call('watch.securities', {}, new AbortController().signal)).resolves.toEqual([security])
+      expect(quotes).not.toHaveBeenCalled()
+      expect(search).not.toHaveBeenCalled()
+    } finally {
+      database.close()
+    }
+  })
+
   it('loads daily watch valuations as one resilient group batch', async () => {
     const { database, market, service } = fixture()
     const group = database.listWatchGroups()[0]!

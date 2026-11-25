@@ -147,6 +147,9 @@ export interface StockMetrics {
   bvps: number | null
   listingDate: string | null
   industry: string | null
+  /** The financial values are cumulative within this fiscal report period; valuations use current quotes. */
+  reportDate?: string | null
+  reportName?: string | null
   meta: ProviderMeta
 }
 
@@ -385,6 +388,7 @@ export interface DashboardData {
   industry: SectorBoard
   concept: SectorBoard
   ranks: Record<'gainers' | 'losers' | 'amount' | 'turnover', RankEntry[]>
+  rankSources?: Record<'gainers' | 'losers' | 'amount' | 'turnover', ProviderMeta>
 }
 
 export interface Diagnostics {
@@ -460,6 +464,7 @@ export interface HanaiEndpointMap {
   'security.kline': { request: { secId: string; period: KLinePeriod; before?: string }; response: StockKLineData }
   'security.valuation': { request: { secId: string }; response: StockValuationData }
   'watch.list': { request: Record<string, never>; response: WatchGroup[] }
+  'watch.securities': { request: Record<string, never>; response: SecurityMaster[] }
   'watch.quotes': {
     request: { groupId: string }
     response: { quotes: WatchQuote[]; meta: ProviderMeta }

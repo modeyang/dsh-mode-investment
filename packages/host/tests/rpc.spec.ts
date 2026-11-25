@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { parseHanaiRequest } from '../src/rpc.ts'
 
 describe('Hanai RPC request validation', () => {
+  it('accepts namespaced backup sector nodes without accepting arbitrary query or URL input', () => {
+    for (const sectorCode of ['BK0475', 'SINA:new_blhy', 'SINA:gn_BCdc']) {
+      expect(parseHanaiRequest('sector.stocks', { sectorCode })).toEqual({ sectorCode })
+    }
+    for (const sectorCode of ['SINA:hs_a', 'SINA:gn_x&page=2', 'https://example.com', 'SINA:../new_blhy']) {
+      expect(() => parseHanaiRequest('sector.stocks', { sectorCode })).toThrow()
+    }
+  })
   it('accepts only conventional persisted themes', () => {
     expect(parseHanaiRequest('theme.set', { theme: 'light' })).toEqual({ theme: 'light' })
     expect(parseHanaiRequest('theme.set', { theme: 'dark' })).toEqual({ theme: 'dark' })
@@ -20,6 +28,7 @@ describe('Hanai RPC request validation', () => {
     })).toEqual({ secId: '1.600519', period: 'daily', before: '2018-06-08' })
     expect(parseHanaiRequest('security.valuation', { secId: '1.600519' })).toEqual({ secId: '1.600519' })
     expect(parseHanaiRequest('watch.valuations', { groupId: 'default' })).toEqual({ groupId: 'default' })
+    expect(parseHanaiRequest('watch.securities', {})).toEqual({})
     expect(parseHanaiRequest('judgement.remove', { id: 'judgement-1' })).toEqual({ id: 'judgement-1' })
     expect(parseHanaiRequest('expert-chat.create', {
       masterId: 'sun-yuchen-perspective',
@@ -41,6 +50,7 @@ describe('Hanai RPC request validation', () => {
       secId: '1.600519', refreshAll: true,
     })).toThrow()
     expect(() => parseHanaiRequest('watch.valuations', { groupId: '../default' })).toThrow()
+    expect(() => parseHanaiRequest('watch.securities', { groupId: 'default' })).toThrow()
     expect(() => parseHanaiRequest('judgement.remove', { id: '../judgement-1' })).toThrow()
     expect(() => parseHanaiRequest('expert-chat.create', {
       masterId: 'sun-yuchen-perspective', openingMessage: '   ',

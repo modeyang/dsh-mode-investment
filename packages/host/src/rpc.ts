@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { RpcResult } from '@deepseek-ai/dsh-host-apiproxy/api'
+import type { ConnectionRpcResult as RpcResult } from '@deepseek-ai/dsh-client-connection'
 import type { HanaiEndpoint, HanaiRequest, HanaiResponse } from '../../contracts/src/index.ts'
 
 const empty = z.object({}).strict()
@@ -11,7 +11,7 @@ const tradingDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const schemas = {
   'bootstrap': empty,
   'dashboard.get': z.object({ refresh: z.boolean().optional() }).strict(),
-  'sector.stocks': z.object({ sectorCode: z.string().trim().regex(/^BK\d{4}$/) }).strict(),
+  'sector.stocks': z.object({ sectorCode: z.string().trim().regex(/^(?:BK\d{4}|SINA:(?:new_|gn_)[A-Za-z0-9_]{1,60})$/) }).strict(),
   'security.sync': z.object({ force: z.boolean().optional() }).strict(),
   'security.search': z.object({ query: z.string().trim().min(1).max(80) }).strict(),
   'security.detail': z.object({ secId }).strict(),
@@ -20,6 +20,7 @@ const schemas = {
   'security.kline': z.object({ secId, period: z.enum(['daily', 'weekly', 'monthly']), before: tradingDate.optional() }).strict(),
   'security.valuation': z.object({ secId }).strict(),
   'watch.list': empty,
+  'watch.securities': empty,
   'watch.quotes': z.object({ groupId: identifier }).strict(),
   'watch.valuations': z.object({ groupId: identifier }).strict(),
   'watch.group.create': z.object({ name: groupName }).strict(),

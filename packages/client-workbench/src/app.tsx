@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { ModelProviderGroup } from '@deepseek-ai/dsh-client-connection/client'
+import type { ModelProviderGroup } from '@deepseek-ai/dsh-api-session-controller/types'
 import type {
   BootstrapData,
   DashboardData,
@@ -212,6 +212,7 @@ export function HanaiWorkbench({ client }: HanaiWorkbenchProps) {
               theme={bootstrap.theme}
               groups={bootstrap.groups}
               onGroups={setGroups}
+              onStock={openStock}
               onCreateJudgement={(stock) => {
                 setLaunchRequest({ key: Date.now(), stock, masterId: null })
                 navigate('/judgements')
@@ -374,7 +375,7 @@ function DashboardPage({ client, theme, onStock, notify }: { client: HanaiClient
   return <Page>
     <PageHeader
       title="今日市场"
-      meta={<><DataStateBadge meta={data.overview.meta} marketStatus={data.overview.marketStatus} refreshFailed={refreshError !== null} /><span>数据来源 {data.overview.meta.sourceName} · 近实时快照 · 更新于 {shortTime(data.overview.meta.fetchedAt)}</span></>}
+      meta={<><DataStateBadge meta={data.overview.meta} marketStatus={data.overview.marketStatus} refreshFailed={refreshError !== null} /><DataSourceText meta={data.overview.meta} /></>}
       action={<button className={`${styles['button']} ${styles['buttonGhost']}`} disabled={refreshing} onClick={() => void load(true)}>{refreshing ? '刷新中' : '刷新'}</button>}
     />
     {refreshError !== null && <div className={styles['errorCard']}><b>行情获取失败：</b>{refreshError}<span>请检查网络后点击刷新；其他面板保留最近成功的数据。</span></div>}
@@ -422,7 +423,8 @@ function DashboardPage({ client, theme, onStock, notify }: { client: HanaiClient
           </div> : <button className={styles['button']} onClick={closeDrill}>← 返回板块</button>}
         />
         {drill === null ? <div className={styles['treemapBody']}>
-          {treemapOption === null ? <Empty compact title="暂无板块热力数据" detail="等待板块成交额与涨跌幅。" /> : <EChart option={treemapOption} {...(styles['treemapChart'] === undefined ? {} : { className: styles['treemapChart'] })} ariaLabel="板块成交额热力图" onChartClick={openSector} />}
+          <div className={styles['dataStrip']}><DataStateBadge meta={sector?.meta} liveCapable={sector?.meta.sourceTimestamp !== null} /><DataSourceText meta={sector?.meta} /></div>
+          {treemapOption === null ? <Empty compact title="暂无板块热力数据" detail={sector?.meta.cacheState === 'unavailable' ? '板块数据源暂不可用，其余行情可继续查看。' : '等待板块成交额与涨跌幅。'} /> : <EChart option={treemapOption} {...(styles['treemapChart'] === undefined ? {} : { className: styles['treemapChart'] })} ariaLabel="板块成交额热力图" onChartClick={openSector} />}
           <div className={styles['treemapLegend']}>
             <span>涨</span>
             {legendStops.map(stop => <i key={stop.value} style={{ background: stop.color }} title={stop.title} />)}
@@ -437,6 +439,7 @@ function DashboardPage({ client, theme, onStock, notify }: { client: HanaiClient
           {([['gainers', '涨幅榜'], ['losers', '跌幅榜'], ['amount', '成交额'], ['turnover', '换手率']] as const).map(([id, label]) => <button key={id} className={rank === id ? styles['buttonSelected'] : styles['button']} onClick={() => setRank(id)}>{label}</button>)}
         </div>} />
         <div className={styles['rankBody']}>
+          {data.rankSources !== undefined && <div className={styles['dataStrip']}><DataStateBadge meta={data.rankSources[rank]} liveCapable={data.rankSources[rank].sourceTimestamp !== null} /><DataSourceText meta={data.rankSources[rank]} /></div>}
           <table className={styles['dataTable']}>
             <thead><tr><th>名称</th><th>最新价</th><th>涨跌幅</th><th>{rank === 'turnover' ? '换手率' : '成交额'}</th></tr></thead>
             <tbody>{data.ranks[rank].map(item => <tr key={item.secId} onClick={() => onStock(toSearchResult(item))}><td><b>{item.name}</b><small>{item.code}</small></td><td>{number(item.price)}</td><td className={styles[classForChange(item.changePct)]}>{percent(item.changePct)}</td><td>{rank === 'turnover' ? ratio(item.turnoverRate) : money(item.amount)}</td></tr>)}</tbody>
@@ -861,16 +864,18 @@ function WatchGroupDialog({ client, open, groups, stock, mode, sourceGroupId = '
 
 type StockChart = 'trend' | 'daily' | 'weekly' | 'monthly'
 
-function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, onCreateJudgement, notify }: { client: HanaiClient; secId: string; theme: ThemeId; groups: WatchGroup[]; onGroups: (groups: WatchGroup[]) => void; onCreateJudgement: (stock: SearchResult) => void; notify: Notify }) {
+function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, onStock, onCreateJudgement, notify }: { client: HanaiClient; secId: string; theme: ThemeId; groups: WatchGroup[]; onGroups: (groups: WatchGroup[]) => void; onStock: (stock: Pick<SecurityMaster, 'secId'>) => void; onCreateJudgement: (stock: SearchResult) => void; notify: Notify }) {
   const [detailState, setDetailState] = useState<{ secId: string; detail: StockDetail } | null>(null)
   const [valuationLoading, setValuationLoading] = useState(true)
   const [dailyHistoryLoading, setDailyHistoryLoading] = useState(false)
   const [dailyHasMore, setDailyHasMore] = useState(true)
   const [dailyViewWindow, setDailyViewWindow] = useState<KlineViewWindow | null>(null)
   const [chart, setChart] = useState<StockChart>('daily')
+  const [chartLoading, setChartLoading] = useState<Partial<Record<StockChart, boolean>>>({ daily: true })
   const [klineMaMode, setKlineMaMode] = useState<KlineMaMode>('short')
   const [turningMarkersVisible, setTurningMarkersVisible] = useState(true)
   const [groups, setGroups] = useState(bootstrapGroups)
+  const [watchSecurities, setWatchSecurities] = useState<SecurityMaster[]>([])
   const [watchDialogOpen, setWatchDialogOpen] = useState(false)
   const requestGeneration = useRef(0)
   const routeController = useRef<AbortController | null>(null)
@@ -879,8 +884,18 @@ function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, on
   const dailyHistoryLoadingRef = useRef(false)
   const dailyHasMoreRef = useRef(true)
   const detail = detailState?.secId === secId ? detailState.detail : null
+  const watchSecIds = [...new Set(groups.flatMap(group => group.secIds))].sort().join(',')
+  const watchSecurityMap = useMemo(() => new Map(watchSecurities.map(security => [security.secId, security])), [watchSecurities])
 
   useEffect(() => setGroups(bootstrapGroups), [bootstrapGroups])
+  useEffect(() => {
+    if (watchSecIds === '') { setWatchSecurities([]); return }
+    const controller = new AbortController()
+    void client.call('watch.securities', {}, controller.signal)
+      .then(securities => { if (!controller.signal.aborted) setWatchSecurities(securities) })
+      .catch(() => { /* Stock codes remain selectable if local names are unavailable. */ })
+    return () => controller.abort()
+  }, [client, watchSecIds])
   useEffect(() => {
     const generation = ++requestGeneration.current
     activeSecId.current = secId
@@ -890,7 +905,7 @@ function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, on
     loadedSurfaces.current = new Set()
     dailyHistoryLoadingRef.current = false
     dailyHasMoreRef.current = true
-    setChart('daily')
+    setChartLoading({ daily: true, weekly: true, monthly: true, trend: true })
     setWatchDialogOpen(false)
     setDetailState({ secId, detail: emptyStockDetail() })
     setValuationLoading(true)
@@ -946,6 +961,7 @@ function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, on
         }))
       })
       .catch(error => failed('日 K', error))
+      .finally(() => { if (active()) setChartLoading(current => ({ ...current, daily: false })) })
     void client.call('security.valuation', { secId }, controller.signal)
       .then(result => update(current => ({
         ...current,
@@ -1038,6 +1054,7 @@ function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, on
     const refreshSurface = async () => {
       if (inFlight || (chart !== 'trend' && loadedSurfaces.current.has(chart))) return
       inFlight = true
+      setChartLoading(current => ({ ...current, [chart]: true }))
       try {
         if (chart === 'trend') {
           const trendResult = await client.call('security.trend', { secId }, controller.signal)
@@ -1061,7 +1078,10 @@ function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, on
         }
       } catch (error) {
         if (active && !controller.signal.aborted && activeSecId.current === secId) notify(messageOf(error), 'error')
-      } finally { inFlight = false }
+      } finally {
+        inFlight = false
+        if (active && activeSecId.current === secId) setChartLoading(current => ({ ...current, [chart]: false }))
+      }
     }
     void refreshSurface()
     if (chart !== 'trend') return () => { active = false; controller.abort() }
@@ -1142,7 +1162,27 @@ function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, on
   return <Page>
     <header className={styles['stockHeader']}>
       <div>
-        <div className={styles['stockNameRow']}><h1>{name}</h1><span>{code}</span><em>{security?.exchange === 'SH' || secId.startsWith('1.') ? '上交所' : security?.exchange === 'BJ' ? '北交所' : '深交所'}</em>{metrics?.industry && <em>{metrics.industry}</em>}</div>
+        <div className={styles['stockNameRow']}>
+          <h1>{name}</h1><span>{code}</span><em>{security?.exchange === 'SH' || secId.startsWith('1.') ? '上交所' : security?.exchange === 'BJ' ? '北交所' : '深交所'}</em>{metrics?.industry && <em>{metrics.industry}</em>}
+          <label className={styles['stockSwitcher']}>
+            <span>自选切换</span>
+            <select
+              aria-label="从自选切换股票"
+              value={watched ? secId : ''}
+              disabled={watchSecIds === ''}
+              onChange={event => { if (event.target.value !== secId) onStock({ secId: event.target.value }) }}
+            >
+              {!watched && <option value="" disabled>{watchSecIds === '' ? '暂无自选股' : '选择自选股票'}</option>}
+              {groups.filter(group => group.secIds.length > 0).map(group => <optgroup key={group.id} label={group.name}>
+                {group.secIds.map(id => {
+                  const item = watchSecurityMap.get(id)
+                  const label = id === secId ? `${name} · ${code}` : item === undefined ? id.slice(2) : `${item.name} · ${item.code}`
+                  return <option key={id} value={id}>{label}</option>
+                })}
+              </optgroup>)}
+            </select>
+          </label>
+        </div>
         <div className={styles['metaLine']}><DataStateBadge meta={detail.sources.quote} /><DataSourceText meta={detail.sources.quote} /></div>
       </div>
       <div className={`${styles['stockLast']} ${styles[classForChange(stock.changePct)]}`}><b>{number(stock.price)}</b><span>{signedNumber(quote?.change ?? metrics?.change ?? null)} / {percent(stock.changePct)}</span></div>
@@ -1152,7 +1192,7 @@ function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, on
     <div className={styles['stockDetailGrid']}>
       <div className={styles['stockMainColumn']}>
         <article className={styles['card']}>
-          <PanelHead title="价格走势" hint={`${chart === 'trend' ? '分时均价' : '东方财富 · 前复权'} · ${chartMeta?.sourceName ?? '来源未知'}${chart === 'daily' ? ` · ${dailyHasMore ? '左拖加载更早数据' : '已加载完整历史'}` : chart === 'weekly' || chart === 'monthly' ? ' · 完整历史' : ''}`} extra={<div className={styles['buttonGroup']}>{([['trend', '分时'], ['daily', '日K'], ['weekly', '周K'], ['monthly', '月K']] as const).map(([id, label]) => <button key={id} className={chart === id ? styles['buttonSelected'] : styles['button']} onClick={() => setChart(id)}>{label}</button>)}</div>} />
+          <PanelHead title="价格走势" hint={`${chart === 'trend' ? '分时均价' : '前复权'} · ${chartMeta?.sourceName ?? '来源未知'}${chart === 'daily' ? ` · ${dailyHasMore ? '左拖加载更早数据' : '已加载完整历史'}` : chart === 'weekly' || chart === 'monthly' ? ' · 完整历史' : ''}`} extra={<div className={styles['buttonGroup']}>{([['trend', '分时'], ['daily', '日K'], ['weekly', '周K'], ['monthly', '月K']] as const).map(([id, label]) => <button key={id} className={chart === id ? styles['buttonSelected'] : styles['button']} onClick={() => setChart(id)}>{label}</button>)}</div>} />
           {chart !== 'trend' && <div className={styles['klineMaBar']}>
             <div className={styles['klineMaModes']} role="group" aria-label="均线组合模式">
               <span>均线组合</span>
@@ -1172,7 +1212,7 @@ function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, on
               <small>最新 K 每 15 秒刷新并动态重算 · 标记点悬浮查看历史后续</small>
             </div>
           </div>}
-          <div className={styles['priceChart']}>{chartOption === null ? <Empty compact title="图表数据加载中" detail="当前周期暂无可用数据。" /> : <EChart
+          <div className={styles['priceChart']}>{chartOption === null ? <Empty compact title={chartLoading[chart] ? '图表数据加载中' : '图表数据暂不可用'} detail={chartLoading[chart] ? '正在获取当前周期行情。' : '当前行情源未返回该周期数据，请稍后重试。'} /> : <EChart
             option={chartOption}
             ariaLabel={chart === 'trend' ? '分时价格图' : `${chart === 'daily' ? '日' : chart === 'weekly' ? '周' : '月'}K线图`}
             onDataZoom={handleKlineDataZoom}
@@ -1195,7 +1235,9 @@ function StockPage({ client, secId, theme, groups: bootstrapGroups, onGroups, on
           <Metric label="流通市值" value={money(quote?.floatCap ?? metrics?.floatCap ?? null)} />
         </div></article>
 
-        <article className={styles['card']}><PanelHead title="基本面（财报期数据）" hint="低频数据 · 与盘中价格时效不同" /><div className={styles['stockMetricGrid']}>
+        <article className={styles['card']}><PanelHead title="基本面（财报期数据）" hint={metrics?.reportDate ? `报告期 ${metrics.reportDate} · ${metrics.reportName ?? '累计财报'} · 估值随行情更新` : '低频数据 · 与盘中价格时效不同'} />
+          <div className={styles['dataStrip']}><DataStateBadge meta={detail.sources.metrics} liveCapable={false} /><small className={styles['dataSource']}>{detail.sources.metrics?.sourceName ?? '财报来源未提供'}{metrics?.reportDate ? ' · 营收、利润、每股收益和 ROE 为本年累计值' : ''}</small></div>
+          <div className={styles['stockMetricGrid']}>
           {fundamentalMetrics(metrics).map(item => <Metric key={item.label} label={item.label} value={item.value} {...(item.tone === undefined ? {} : { tone: item.tone })} />)}
         </div></article>
       </div>

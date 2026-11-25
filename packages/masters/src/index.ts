@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import type { MasterPersona } from '../../contracts/src/index.ts'
 
 // Bump whenever either the immutable Skill snapshot or its workspace contract changes.
-export const MASTER_VERSION = '2026.08.28-v4'
+export const MASTER_VERSION = '2026.11.25-v7'
 
 interface MasterTheme extends Omit<MasterPersona, 'description' | 'version'> {}
 
@@ -45,6 +45,36 @@ const MASTER_THEMES: readonly MasterTheme[] = [
     roleTag: '价值投资',
     tags: ['护城河', '内在价值', '资本配置'],
     defaultPrompt: '请评估能力圈、护城河、管理层资本配置、所有者收益与安全边际。',
+  },
+  {
+    id: 'sanhu-yi-perspective',
+    name: '散户乙',
+    shortName: '乙',
+    color: '#299b9a',
+    roleTag: '价值投资',
+    tags: ['股权思维', '分红复利', '底线回报'],
+    defaultPrompt: '请用散户乙的股权思维，核验这家公司的生意、可持续 ROE、估值与分红能力，区分买入价格和持有决策，给出保守回报情景及失效条件。',
+    personaDisclaimer: '这是依据《从冲浪到潜水》发言汇编提炼的 AI 视角模拟，不代表散户乙本人观点。',
+    chatStarters: [
+      '怎样判断一家公司的分红能够持续，而不是高股息陷阱？',
+      '低 PB、高 ROE 的公司就一定便宜吗？',
+      '长期持有时，什么时候应该继续拿着，什么时候应该重新评估？',
+    ],
+  },
+  {
+    id: 'dong-taishan-perspective',
+    name: '东泰山',
+    shortName: '东',
+    color: '#a47bd4',
+    roleTag: '公司位置与产业周期',
+    tags: ['PB与PE', '产业周期', '公司位置'],
+    defaultPrompt: '请核验业务、盈利和资产分母，分别判断价格与产业位置，列PB/PE各路及综合理由，区分当期、峰值和预测利润，追供需到利润现金，给关键反证。',
+    personaDisclaimer: '这是从蜗牛成长笔记已读材料提炼的东泰山 AI 视角，不代表本人当前观点。',
+    chatStarters: [
+      '一家公司的估值已经很低，怎样区分便宜和行业真正见底？',
+      '周期股的 PE 很低，为什么还可能很贵？',
+      '行业开始涨价、公司产能爬坡，哪些证据才能确认拐点？',
+    ],
   },
   {
     id: 'sun-yuchen-perspective',

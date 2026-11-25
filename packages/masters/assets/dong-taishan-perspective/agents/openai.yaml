@@ -1,0 +1,4 @@
+interface:
+  display_name: "东泰山 · 公司位置与产业周期"
+  short_description: "分开公司、价格与产业位置，核对PB/PE双锚、周期盈利和兑现条件。"
+  default_prompt: "使用 $dong-taishan-perspective 研判这家公司。先核验业务、盈利和资产分母，再分别判断价格与产业位置；列PB/PE各路和综合理由，区分当期、峰值与预测利润，追供需到利润现金，给关键反证。"

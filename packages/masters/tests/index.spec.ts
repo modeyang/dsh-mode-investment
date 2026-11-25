@@ -53,6 +53,8 @@ describe('legacy master Skill migration', () => {
     expect(bundled.filter(file => Object.hasOwn(manifest.files, file)))
       .toEqual(Object.keys(manifest.files).sort())
     const extraFiles = [
+      ...relativeFiles(join(ASSETS_ROOT, 'sanhu-yi-perspective')).map(file => `sanhu-yi-perspective/${file}`),
+      ...relativeFiles(join(ASSETS_ROOT, 'dong-taishan-perspective')).map(file => `dong-taishan-perspective/${file}`),
       'sun-yuchen-perspective/SKILL.md',
       'sun-yuchen-perspective/agents/openai.yaml',
       'sun-yuchen-perspective/references/provenance.md',
@@ -78,15 +80,19 @@ describe('legacy master Skill migration', () => {
       'hunjianglong-perspective',
       'munger-perspective',
       'warren-buffett-perspective',
+      'sanhu-yi-perspective',
+      'dong-taishan-perspective',
       'sun-yuchen-perspective',
       'serenity-perspective',
     ])
-    expect(new Set(masters.map(master => master.version))).toEqual(new Set(['2026.08.28-v4']))
+    expect(new Set(masters.map(master => master.version))).toEqual(new Set(['2026.11.25-v7']))
     expect(masters.map(({ color, roleTag, tags }) => ({ color, roleTag, tags }))).toEqual([
       { color: '#d4a017', roleTag: '价值投资', tags: ['本分', '消费者导向', '长期价值'] },
       { color: '#c4573d', roleTag: '游资大佬', tags: ['题材周期', '情绪', '弱转强'] },
       { color: '#5b8def', roleTag: '价值投资', tags: ['多元思维', '逆向思考', '认知偏误'] },
       { color: '#34a870', roleTag: '价值投资', tags: ['护城河', '内在价值', '资本配置'] },
+      { color: '#299b9a', roleTag: '价值投资', tags: ['股权思维', '分红复利', '底线回报'] },
+      { color: '#a47bd4', roleTag: '公司位置与产业周期', tags: ['PB与PE', '产业周期', '公司位置'] },
       { color: '#f29d38', roleTag: '行业与注意力周期', tags: ['行业周期', '注意力套利', '叙事判断'] },
       { color: '#0ea5e9', roleTag: '产业链瓶颈研究', tags: ['供应链卡点', '证据分层', '逆向核验'] },
     ])

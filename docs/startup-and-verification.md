@@ -1,6 +1,6 @@
 # Hanai Worth · 值见 DSH 启动与验收报告
 
-> 验收日期：2026-08-23
+> 最近适配验收：2026-10-18；首版验收：2026-08-23
 
 ## 1. 结论
 
@@ -12,7 +12,7 @@ Hanai Worth · 值见当前以兼容包名 `dsh-mode-investment` 和独立 DSH P
 | --- | --- |
 | Node.js | `v22.22.0` |
 | pnpm | `11.7.0` |
-| DeepSeek Harness | `0.1.1-rc.2` |
+| DeepSeek Harness | `0.2.1-rc.2` |
 | Profile | `mode-investment` |
 | 默认监听 | `http://127.0.0.1:3080` |
 
@@ -29,6 +29,7 @@ pnpm --version
 在仓库根目录执行：
 
 ```bash
+npm install -g @deepseek-ai/dsh@0.2.1-rc.2
 pnpm install --frozen-lockfile
 pnpm run build
 pnpm run profile:install -- --package .
@@ -36,18 +37,18 @@ pnpm run profile:verify
 dsh --profile mode-investment
 ```
 
-终端出现以下输出后，在浏览器打开对应地址：
+终端出现以下输出后，使用终端中的完整地址首次打开浏览器。DSH 0.2 会用启动 token 换取浏览器会话，再重定向到不含 token 的地址：
 
 ```text
-dsh web: http://127.0.0.1:3080
+dsh web: http://127.0.0.1:3080/?token=<本次启动 token>
 ```
 
 安装器会执行以下装配与迁移：
 
-1. 安装当前 dsh-mode-investment 插件包；
+1. 安装当前 Hanai 插件包；
 2. 把 Bundle 顺序规范化为 `@deepseek-ai/dsh-base` → `@deepseek-ai/dsh-web-app` → `dsh-mode-investment`；
 3. 从 Profile dependencies 中移除早期版本错误安装的 `@deepseek-ai/dsh-web-app`，再由 pnpm 清理它带入的本地 DSH runtime 副本；
-4. 校验 Profile 与 `dsh-agent-loop` 解析到同一个真实 `@deepseek-ai/dsh-tools` 模块。
+4. 使用当前 CLI 的内存模块解析机制，校验 Profile 与 `dsh-agent-loop` 解析到同一个真实 `@deepseek-ai/dsh-tools` 模块。
 
 Base 和 Web App 是当前 DSH CLI 自带的 installation-owned Bundle，不应安装成 Profile dependency。Profile 中只保留 `dsh-mode-investment` 这一项直接依赖。
 
@@ -85,29 +86,6 @@ dsh web
 
 两个 Profile 可以使用不同端口并行运行。
 
-### 5.1 macOS 后台服务
-
-如需让投资模式作为 macOS 用户级后台服务运行，先构建当前脚本，再安装 LaunchAgent：
-
-```bash
-pnpm run build
-pnpm run service:install
-```
-
-默认服务执行 `dsh --profile mode-investment --port 3090 --no-open`，登录后自动启动。日常命令：
-
-```bash
-pnpm start
-pnpm stop
-pnpm restart
-pnpm status
-pnpm run service:uninstall
-```
-
-完整命令分别对应 `service:install`、`service:start`、`service:stop`、`service:restart`、`service:status`、`service:uninstall`。服务 plist 位于 `~/Library/LaunchAgents/com.modeyang.dsh-mode-investment.plist`，日志位于 `~/Library/Logs/dsh-mode-investment/`。`stop` 使用 `launchctl bootout` 停止并保留 plist；`uninstall` 才删除 plist。LaunchAgent 使用固定绝对路径、当前用户的 `HOME/PATH`、仓库绝对工作目录和 `--no-open`，不把 API Key 写入 plist。
-
-如端口已被占用，安装会失败并将原因写入 `stderr.log`；可先执行 `pnpm stop`，或用 `pnpm run service:install -- --port 3091` 生成其它端口的服务配置。
-
 ## 6. 数据与凭据边界
 
 | 数据 | 所有者 | 默认位置 |
@@ -115,7 +93,7 @@ pnpm run service:uninstall
 | 自选、证券主数据、研判/专家对谈索引、报告、行情/估值缓存 | Hanai | `~/.dsh-mode-investment` |
 | DeepSeek Key、默认模型、Session 消息、工具事件、附件 | DSH | 当前 `$DSH_HOME` |
 
-实测新数据根目录权限为 `0700`，SQLite 文件权限为 `0600`。旧数据目录保留原状，新版没有数据导入入口。
+实测新数据根目录权限为 `0700`，SQLite 文件权限为 `0600`。旧版目录保留原状，新版没有数据导入入口。
 
 ## 7. 自动化验收
 
@@ -127,17 +105,17 @@ pnpm run check
 
 它依次覆盖 TypeScript、单元/集成测试、Host 与 Client 生产构建、npm tarball allowlist、DSH ModuleLoader 协议、source map、三方许可证、私有绝对路径和旧数据路径隔离。
 
-本次最终运行结果：
+首版最终运行结果（2026-08-23；本次适配结果见第 12 节）：
 
 | 门禁 | 结果 |
 | --- | --- |
 | `pnpm run typecheck` | 通过 |
-| `pnpm run test` | 29 个测试文件、204 项测试全部通过 |
+| `pnpm run test` | 27 个测试文件、187 项测试全部通过 |
 | `pnpm run build` | Host、Client 与 Profile tools 构建通过 |
-| `pnpm run pack:check` | 90 个发布文件通过 |
+| `pnpm run pack:check` | 71 个发布文件通过 |
 | `git diff --check` | 通过 |
 
-六个专家 Skill 均通过结构校验，其中新增孙宇晨视角还通过 `skill-creator` 的 `quick_validate.py`；原始迁移资产中的 51 个文件继续由 SHA-256 清单校验，发布包包含全部 8 个脚本。已在 rc.2 Host/Web 上完成 Profile 启动、页面加载、Session 创建与 prompt/event 链路 smoke；临时无 Key 环境中的模型调用按预期停在凭据校验。
+五个专家 Skill 均通过结构校验，其中新增孙宇晨视角还通过 `skill-creator` 的 `quick_validate.py`；原始迁移资产中的 51 个文件继续由 SHA-256 清单校验，发布包包含全部 8 个脚本。已在 rc.2 Host/Web 上完成 Profile 启动、页面加载、Session 创建与 prompt/event 链路 smoke；临时无 Key 环境中的模型调用按预期停在凭据校验。
 
 另外已使用全新的临时 `DSH_HOME` 实际执行：
 
@@ -150,7 +128,7 @@ pnpm run profile:verify
 
 ## 8. 浏览器验收
 
-已在真实 DSH Host/Web 中完成以下检查：
+首版已在真实 DSH Host/Web 中完成以下检查：
 
 - 1520 × 940：侧栏 176px、顶栏 46px、页面无水平溢出；
 - 1280 × 720：Dashboard 和股票详情无水平溢出；
@@ -159,9 +137,8 @@ pnpm run profile:verify
 - 股票详情：默认日 K、完整 dataZoom、分时、雷达、真实时间轴价值曲线、±10%/±30% 红绿价值带与未来预测提示；
 - 股票详情渐进加载：本机实测约 0.6 秒内先出现证券名称与页面结构，日 K、估值和其它分面随后独立收敛；周/月 K 仅在切换时加载；
 - 自选：分组管理、三态排序、加入/移动/移除和整行进入详情；
-- 研判：原列表、筛选、创建弹窗、执行过程、报告归档与同 Session 继续对话入口；Serenity 两阶段研判（先封存研究计划、再生成报告）与详情页“查看研究计划”；
-- 专家对谈：股票无关入口、六位专家选择、Serenity 主题必填与先计划后研究、计划详情、孙宇晨开场问题与身份披露、普通空白 Session、历史列表、深链、删除约束和专家语境聊天文案；
-- 专家中心与两阶段研判：六位专家卡（含 Serenity）经 `agent-browser` 在 `http://127.0.0.1:3090/#/personas` 可见；Serenity 研判先封存 `PLAN.md` 再进入研究阶段生成 `REPORT.md`，与现有报告校验/封存共用同一套校验与 SHA-256 管线。
+- 研判：原列表、筛选、创建弹窗、执行过程、报告归档与同 Session 继续对话入口；
+- 专家对谈：股票无关入口、五位专家选择、孙宇晨开场问题与身份披露、空白 Session、历史列表、深链、删除约束和专家语境聊天文案；
 - 900 × 800 专家对谈详情：响应式上下分栏且无水平溢出；
 - 设置：Key write-only、默认模型真实读写、缓存、存储、数据源和主题；
 - Hash 路由：直接打开、刷新、后退和前进均保持页面语义；
@@ -206,6 +183,16 @@ pnpm run profile:verify
 
 页面会保留最近成功快照并明确标记来源状态。分时/K 线可降级到腾讯行情；不要把缓存或延迟值当作实时行情。
 
+实时接口与历史 K 线使用独立熔断状态，主源熔断也不会阻断腾讯分时/K 线备源。指数、个股和自选报价可切换到腾讯，页面保留其真实交易时间；财报字段、板块和榜单缺失时仍显示不可用，不从备源报价推造数据。首页的板块或榜单失败不会再导致整页数据丢失。
+
+`行情源请求连续失败` 表示网络、响应或服务失败后暂停主源请求；只有观察到 HTTP 429 才会提示限流。等待重试可能恢复临时故障，但持续断连的上游接口仍需等待供应商或网络恢复。
+
+### 专家对谈没有记录
+
+创建对谈时可以留空开场问题，因此列表里有对谈记录并不代表已发送过消息。空白对谈会提示“还未开始对谈，发送第一个问题即可”；输入问题后发送即可开始。已有消息直接从关联的 DSH Session 读取，不会因升级清空。
+
+刷新或直接打开对谈详情时，客户端先等待 DSH 的首次会话列表就绪，再读取关联 Session；连接重试期间保留已有 Session reference，避免把尚未同步的旧会话误报为不存在。
+
 ### 如何确认没有修改官方 Profile
 
 ```bash
@@ -218,3 +205,117 @@ dsh --profile mode-investment --dump-default-config
 ```bash
 pnpm run profile:verify
 ```
+
+## 11. 散户乙专家接入验收（2026-09-12）
+
+新增 `sanhu-yi-perspective`，支持独立研判和开放对谈；专家资源版本为 `2026.09.12-v4`。当前共有六位对谈专家、五位研判专家。能力包包含六个心智模型、八条条件决策、六维研究、算例及两阶段独立审查记录，详见[来源与蒸馏记录](../packages/masters/assets/sanhu-yi-perspective/references/provenance.md)。
+
+| 验证 | 本次结果 |
+| --- | --- |
+| 类型检查与生产构建 | `pnpm run typecheck`、`pnpm run build` 通过 |
+| 自动测试 | `pnpm test`：28 个测试文件、198 项测试全部通过；包括两种专家任务创建、完整资源快照及包内引用检查 |
+| 发布包 | `pnpm run pack:check`：87 个发布文件符合契约 |
+| Skill 结构 | `quick_validate.py` 通过；nuwa 正则检查的来源项实际跳过，以人工来源审核为准 |
+| 本机 Profile | `pnpm run profile:verify` 通过，沿用已有 `mode-investment` Profile |
+| 服务启动 | `dsh --profile mode-investment` 成功监听 `http://127.0.0.1:3080`，HTTP 200 |
+| 浏览器入口 | 专家中心展示散户乙；新建研判可选中；开放对谈可选中并展示三个开场问题及模拟说明 |
+| 真实会话创建 | 已创建散户乙空白对谈；16 个能力文件逐一校验与源码一致，工作区契约版本正确，开放对谈没有创建 `REPORT.md` |
+
+本次真实服务验收截至空白对谈创建，未发起真实模型 Turn；研判调度与报告/对谈分流由集成测试覆盖。人物验证忠于用户提供的发言汇编，原帖未逐条核验，不宣称一手来源比例或投资效果已经验证。
+
+## 12. DSH 0.2 适配验收（2026-09-30）
+
+本机 CLI、Host peer 和 Client service plugin 统一到 `0.2.0-rc.2`。旧的 `dsh-host-apiproxy` 和 `dsh-client-runtime` 已移除：Host 使用原生 Session/Workspace Controller，Client 使用 Typert Remote 的凭据与模型接口。聊天页通过 Session reference 持有生命周期，分别订阅 Conversation Chat target、inbox 和 pending interaction；离开页面会释放 reference 和订阅。
+
+Profile 校验改用当前 CLI 的 `createRuntimeResolution` 与 `PluginPackages`，不再依赖旧版落盘 fallback 链接。Hanai Profile 为 Connection 补齐 `webServer` 注入，业务 RPC 沿用 `/hanai` 通道并由新版浏览器认证和 Host/Origin 校验保护。Client 为 `remote.credentials` 和 `remote.session` 声明独立注入。
+
+| 验证 | 本次结果 |
+| --- | --- |
+| 完整门禁 | `pnpm run check` 通过：29 个测试文件、205 项测试；Host、Client、Profile tools 构建通过；87 个发布文件符合契约 |
+| 依赖可复现性 | `pnpm install --frozen-lockfile --ignore-scripts --strict-peer-dependencies` 通过 |
+| 独立 Profile | 全新临时 `DSH_HOME` 中安装、组合和真实模块 identity 校验通过 |
+| 生产 tarball | 安装实际 npm tarball 后，脱离仓库链接启动 Host，认证 bootstrap、原生 Session 创建与归档均通过 |
+| 认证与设置 | 未认证 `/hanai` 请求返回 401；设置页正确读取凭据状态和当前模型目录 |
+| 无 Key 会话 | 创建散户乙空白对谈、发送消息、接收凭据错误事件、刷新恢复历史、删除业务记录和归档 Session 均通过 |
+| 真实模型与工具 | 使用已有 DSH 凭据和 DeepSeek-V4-Pro，临时业务工作区中的 `read` 工具成功读取 `AGENTS.md`，专家回复“验证成功”；调用期间浏览器无警告或错误 |
+| 进程重启恢复 | 重启验证 Host 后，用户消息、工具过程和真实回复均能恢复；重启期间仅有预期的连接重试警告 |
+| 日常服务 | 原有 `mode-investment` Profile 启动成功，监听 `http://127.0.0.1:3080`；官方 `web` Profile 的 manifest 和 patch 指纹保持一致 |
+
+真实调用测试使用临时 Hanai 数据目录，测试 Session 在完成后归档。没有重新运行完整证券研判或改写已有报告；报告状态机和封存由集成测试覆盖。上游共享 UI 包未附带其声明的 JavaScript source map，会使 Vite 测试输出缺失 map 的警告，但全部测试正常通过。
+
+## 13. 行情降级与对话首次加载修复（2026-10-01）
+
+实测东方财富实时与延迟集群均断开连接（Node `UND_ERR_SOCKET`；curl 也收到空响应），历史 K 线与腾讯接口正常。原实现把所有失败提示为限流，并共享实时/历史熔断状态；熔断异常还会跳过腾讯备源。现在按实时/历史隔离状态，保留备源调用，并仅在观察到 HTTP 429 后提示限流。腾讯报价按 GBK 解码、转换成交额/市值单位，并携带真实交易时间；首页逐面板降级，空板块明确提示不可用。
+
+对话详情首次挂载会等待 DSH 会话列表就绪再 retain，重连时保留现有 reference；空白专家对谈改为明确的首问提示。图表请求结束但没有数据时显示不可用，不再持续显示加载中。
+
+| 验证 | 结果 |
+| --- | --- |
+| 完整门禁 | `pnpm run check` 通过：29 个测试文件、215 项测试；类型、构建、87 个发布文件检查均通过 |
+| Profile | `pnpm run profile:verify` 通过；沿用原独立 Profile |
+| 实际行情 | 六大指数、市场宽度、比亚迪报价正常返回；日/周/月 K 分别返回 726/780/184 根，最新日期均为 2026-09-30 |
+| 浏览器 | 首页显示腾讯备源和真实交易时间；比亚迪报价、行情快照与日 K 恢复；既有专家对谈直接刷新后恢复历史，空白对谈展示首问提示 |
+| 数据边界 | 未发送新的模型消息，未改写已有研判报告或对谈内容 |
+
+东方财富板块、榜单和部分财报字段目前仍不可用，页面保留缺失状态；本次修复不承诺上游接口恢复。
+
+## 14. 东泰山专家接入与真实会话验收（2026-10-01，v5历史验收）
+
+新增 `dong-taishan-perspective`，支持与巴菲特等专家相同的股票研判、开放对谈及持续追问；当前共有七位对谈专家、六位研判专家，资源版本为 `2026.10.01-v5`。三个模型分别处理估值/产业双轴、业务与估值分母、拐点兑现与同行共性，配有十条条件启发式及首次 AI 视角披露。
+
+使用用户指定的“蜗牛成长笔记”知识星球，按页面星主昵称东泰山提炼。25 个来源条目按帖子去重为 21 组，其中 14 组包含明确归属的完整可见正文或作者回复；检索预览、转载和未读附件另行标记。能力包只保存改写的摘要与定位，不含付费全文、PDF、成员评论原文或账户资料。六维研究、三项独立行为测试、两份精炼报告及采纳记录见[蒸馏记录](../packages/masters/assets/dong-taishan-perspective/references/provenance.md)。
+
+| 验证 | 结果 |
+| --- | --- |
+| 完整门禁 | `pnpm run check` 通过：30 个测试文件、226 项测试；类型与生产构建通过。最终文字精炼后再次通过 8 项资源测试及 `git diff --check` |
+| Skill 与发布包 | skill-creator `quick_validate.py` 通过；最终包 105 个发布文件，东泰山能力包 18 个文件、包内 Markdown 引用均可解析 |
+| Profile | 日常 Profile 及独立临时 `DSH_HOME` 安装、Base → Web app → Hanai 装配和 runtime identity 校验通过 |
+| 真实对谈 | 临时数据目录中实际调用 DeepSeek-V4-Pro（High），读取工作区合同和 Skill，完成虚构案例、连续追问、退出角色及退出后追问；最终新建对谈的 18 个能力文件与源码 SHA-256 逐一一致，未生成 `REPORT.md` |
+| 真实证券研判 | DeepSeek-V41-Flash 实际完成贵州茅台研判，调用公开检索/抓取和写入工具，报告状态为 `ready`，形成一个封存版本；工作副本 6818 字符，SHA-256 为 `700357fd2b2c3961860db360d25ae3bd77b230412fa0fd9158e4ce96a57c37f1` |
+| 普通研判追问 | 复用原 Session 完成解释，`REPORT.md` 哈希保持一致，未创建新报告版本 |
+| 浏览器入口 | 日常 Chrome 的专家中心显示东泰山及两种能力；对谈创建器默认选中东泰山，显示三个预设问题和 AI 说明，点击预设后输入框正确填入。研判选择器另由客户端测试覆盖 |
+| 日常服务 | 重启后 `http://127.0.0.1:3080/` 的认证 bootstrap 返回东泰山和全部七位专家；保留原四条研判、两条对谈索引，既有研判目录的 64 个 Markdown 文件指纹一致 |
+
+真实模型测试使用隔离的 Hanai 业务数据和 DSH 数据目录，测试会话结束后清理业务记录并归档 Session；日常服务沿用用户原有数据目录和模型设置。真实研判使用文字精炼前的资源快照；最终包的完整复制由新建真实对谈验证，最终研判/对谈分流与报告封存同时由 Host 集成测试覆盖。
+
+**行为验收的实际边界。** 正常化 PE 算术、库存结构区分、价格上涨不能直接证明倍数扩张，以及退出角色行为均可运行；但 Flash/Pro 在压力问题的开头仍可能过早给出高低或顶部标签，且追问曾补出来源未规定的季度门槛。已在最终 Skill 的工作流入口明确证据边界、不设统一周期阈值；这不等于这些模型已稳定遵守所有约束。因此本轮确认的是接入、工具和报告生命周期，以及有来源边界的方法提炼，不宣称判断准确率、人物盲测辨识度或输出绝对稳定。真实报告的全部金融事实也未由维护者逐项独立复核，不能把运行成功当成投资效果验证。
+
+
+## 15. 东泰山扩充蒸馏与v6验收（2026-10-01）
+
+资源版本更新为`2026.10.01-v6`，东泰山仍支持股票研判和开放对谈。依据2025-01-01起2,168个不同帖的2,170个正文文字版本、已加载作者回复及完整核读的109份PDF/2,940页和2份表格生成；134件下载、132件提取、111件完整核读分别计数。仍有785已下载PDF页、2音频以及未取得图片、附件和未加载评论，不能称全载体读完。
+
+筛选保留PB分母与盈利能力、双锚条件综合、周期利润与兑现三个核心；位置分层为工作流，成长/研发/现金为条件分支。来源定位修复主帖/回复对象、日期和本人/维护者边界。独立人工完成已知、虚构边缘、百字表达和合同检查，再并行进行执行与结构精炼；详细记录见[能力包验收](../packages/masters/assets/dong-taishan-perspective/references/validation/07-refinement.md)。这些不是投资效果或真人辨识测试。
+
+| 验证 | 结果 |
+| --- | --- |
+| 完整门禁 | `pnpm run check`通过：30文件/226项测试、类型与生产构建、105个发布文件；最终文字更新另跑资源和Host相关检查 |
+| Skill结构与引用 | skill-creator quick_validate通过；能力包18文件，相对引用不越包边界；公开包不含私有原件/路径/凭据 |
+| Profile | 日常Profile安装及装配/runtime identity验证通过，临时Profile沿用已验证的仓库链接 |
+| 真实模型 | 隔离业务数据中DeepSeek-V4-Pro（High）完成复杂虚构题、改数值变体、最终归母PB/扣非短题；读取合同/Skill并使用计算工具 |
+| 数据保留 | 日常认证bootstrap返回v6与7位专家；4条既有研判、3条对谈和64个既有报告Markdown指纹保持一致，旧专家快照不改写 |
+| 日常服务 | `dsh --profile mode-investment --port 3080 --no-open`正常运行；身份认证入口从本次启动日志内部读取，不公开访问令牌 |
+
+真实调用初始因隔离环境未继承凭据失败，随后在临时owner-only凭据文件中复用已有DeepSeek条目；结束后恢复临时文件原字节，不修改日常模型设置。测试业务记录删除、对应Session归档，临时服务器结束。
+
+**实际行为边界。** 复杂压力题曾自行补PE倍数、将未确认改成否定、混情景与交易PB、错配少数权益归属及把扣非当常态。已在入口加入四种计算分列、复算/标签、归母市值和扣非边界。改数值变体正确区分100/98情景与120市值；最终短题正确用120/100=1.2并拒绝扣非直接等常态。这不是整个压力集稳定通过，仍需核对具体输出。v6没有重跑完整真实证券报告，研判写入/封存/普通追问合同由Host集成测试覆盖，不复用第14节v5报告为v6结果。
+
+新版使用方法：刷新后新建“东泰山”研判或对谈，使用v6快照；已有会话保留创建时版本。自行启动用README中的`dsh --profile mode-investment --port 3080`，打开本次终端打印的完整认证URL；旧进程入口不能用于新进程登录。
+
+## 16. DSH 0.2.1 兼容升级（2026-10-18）
+
+CLI、Hanai 的 DSH peer/dev dependencies 和 Profile 安装器统一锁定 `0.2.1-rc.2`；包内新增同版本的 `engines.dsh`，供新版插件兼容检查使用。Cordis、Schemastery 及 Profile 装配需要的 Group/Loader/Include 同步到该版本所需的依赖。
+
+实际启动发现旧 Connection patch 依赖的 `webRuntime` 已被上游移除，导致 Connection 和 Hanai Host 无法激活。现改为 `webStartup`，保留注册认证业务通道所需的 `webServer`；配置组合校验通过不能代替实际启动验收。
+
+| 验证 | 结果 |
+| --- | --- |
+| 依赖可复现性 | `pnpm install --frozen-lockfile --ignore-scripts --strict-peer-dependencies` 通过，无 DSH peer 版本冲突 |
+| 完整门禁 | `pnpm run check` 通过：TypeScript、Host/Client/Profile tools 构建、30 个测试文件的 230 项测试、105 个发布文件检查均通过 |
+| 独立 Profile | 全新 `DSH_HOME` 中安装及 runtime identity 验证通过；生产 tarball 脱离仓库链接启动，七位专家及认证业务 RPC 正常 |
+| 认证 | 未认证业务请求返回 401；启动 token 换取浏览器会话后 bootstrap 返回 200 |
+| 既有数据 | 先在用户数据副本上验收；正式升级后，6 只自选、4 条研判、4 个报告版本、4 条对谈的数据库记录和 140 个业务文件指纹均与升级前一致，官方 `web` Profile 的 manifest/patch 保持不变 |
+| 真实模型与工具 | 隔离环境中新建段永平对谈，默认 DeepSeek-V4.1-Flash 实际调用 `read` 读取 `AGENTS.md` 并回复“兼容验证通过”；调用期间浏览器无警告或错误 |
+| 重启与页面 | 重启后恢复测试消息、工具记录及回复；自选列表和详情页下拉切换通过；正式服务重新监听 3080，设置页连接、模型目录及凭据状态正常 |
+
+切换前备份 DSH 配置与 Session、Hanai 数据、旧 CLI、旧构建和源码快照至本机 `~/.hanai-backups/`。本轮真实模型检查限于最小工具调用，不重新执行证券研判或改写既有报告。新版模型目录使用上游定义；后续 DSH 版本仍需重新验收后才能放宽版本约束。
