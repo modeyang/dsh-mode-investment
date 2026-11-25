@@ -342,3 +342,17 @@ pnpm run service:uninstall
 - [ ] Profile、凭据、数据隔离和发布边界未被破坏。
 - [ ] UI/研究/架构文档已按需更新。
 - [ ] `git diff --check` 通过，仓库可由下一次会话直接接续。
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub at `modeyang/dsh-mode-investment`; explicitly target origin. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context layout. See `docs/agents/domain.md`.
